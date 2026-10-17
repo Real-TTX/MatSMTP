@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 268 64" role="img" aria-label="MatSMTP">
+  <rect width="64" height="64" rx="14" fill="#e8a200"/>
+  <g transform="translate(8 8) scale(2)" fill="none" stroke="#1f1a0a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="3" width="16" height="11.5" rx="2"/><path d="m2.6 4.4 7.4 5.6 7.4-5.6"/><path d="M10 19.5h11"/><path d="m17.5 16 3.5 3.5-3.5 3.5"/>
+  </g>
+  <text x="80" y="44" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="34" font-weight="700" letter-spacing="-0.5" fill="#111827">Mat<tspan fill="#805c00">SMTP</tspan></text>
+</svg>

@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>MatSmtp</RootNamespace>
+    <AssemblyName>MatSmtp</AssemblyName>
+    <UserSecretsId>matsmtp</UserSecretsId>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.*" />
+    <!-- Pinned to the same version as the design-time package, so the tests resolve one consistent EF Core -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.*">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <!-- The SMTP server that receives the mails of the applications (STARTTLS, implicit TLS, AUTH PLAIN/LOGIN) -->
+    <PackageReference Include="SmtpServer" Version="11.*" />
+    <!-- MimeKit reads and rewrites the messages, MailKit sends them through the SMTP accounts -->
+    <PackageReference Include="MailKit" Version="4.*" />
+    <!-- MailKit brings an older one with known vulnerabilities: pinned to the patched release -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+    <!-- Draws the QR code of the authenticator app set-up as SVG (pure managed, no external service) -->
+    <PackageReference Include="QRCoder" Version="1.*" />
+    <!-- SMB client: backups on a NAS -->
+    <PackageReference Include="SMBLibrary" Version="1.5.7.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MatSmtp.Core\MatSmtp.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MatSmtp.Tests" />
+  </ItemGroup>
+
+</Project>

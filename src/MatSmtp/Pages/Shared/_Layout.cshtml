@@ -1,0 +1,170 @@
+@inject IconSprite Sprite
+@inject ShellFactory ShellFactory
+@{
+    // A page fills these in: Title, PageSub, Crumbs (the breadcrumb below the app name), Width ("narrow" or "wide"), ActiveHref (the menu item it belongs to).
+    // A page that draws its own head sets OwnHead.
+    var shell = await ShellFactory.BuildAsync();
+    var title = ViewData["Title"] as string ?? "MatSMTP";
+    var ownHead = ViewData["OwnHead"] is true;
+    var sub = ViewData["PageSub"] as string;
+    var crumbs = ViewData["Crumbs"] as IReadOnlyList<(string Text, string? Url)> ?? [];
+    var width = ViewData["Width"] as string;
+    var active = ViewData["ActiveHref"] as string ?? Navigation.ActiveHref(shell.Menus, Context.Request.Path.Value ?? "/");
+}
+<!DOCTYPE html>
+<html lang="de" data-app="matsmtp" data-sw="@(AppVersion.Current)-@(Sprite.Hash)" @Html.Raw(shell.RootAttributes)
+      data-dlg-ok="OK" data-dlg-cancel="Abbrechen" data-dlg-close="Schließen" data-dlg-confirm="Bitte bestätigen" data-dlg-notice="Hinweis" data-dlg-input="Eingabe"
+      data-msg-required="Bitte fülle dieses Feld aus." data-msg-type="Bitte gib einen gültigen Wert ein." data-msg-pattern="Das Format stimmt nicht." data-copied="Kopiert">
+<partial name="_Head" model="(shell, title)" />
+<body>
+    <a class="mat-skip" href="#main">Zum Inhalt springen</a>
+    @Html.Raw(Sprite.Html)
+
+    <div class="mat-app">
+        <aside class="mat-nav" id="mat-nav">
+            <div class="mat-nav__brand">
+                <a href="@shell.HomeHref" aria-label="MatSMTP, Startseite">
+                    @Ui.Logo()
+                    <span>
+                        <span class="mat-nav__name">MatSMTP</span>
+                        <span class="mat-nav__tagline">@shell.Tagline</span>
+                    </span>
+                </a>
+                <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-nav__close" data-nav-close aria-label="Menü schließen">@Ui.Icon("x")</button>
+            </div>
+
+            <partial name="_Menu" model="(shell, active)" />
+
+            <div class="mat-nav__foot">
+                @if (shell.HasSwitcher)
+                {
+                    <partial name="_MenuSwitcher" model="(shell, active)" />
+                }
+                <div class="mat-nav__account">
+                    <button type="button" class="mat-user" data-menu-toggle="user-menu" aria-haspopup="menu" aria-expanded="false">
+                        <span class="mat-avatar" aria-hidden="true">@Ui.Initials(shell.UserName)</span>
+                        <span class="mat-user__text">
+                            <span class="mat-user__name">@shell.UserName</span>
+                            <span class="mat-user__role">@shell.UserRole</span>
+                        </span>
+                        @Ui.Icon("chevron-up", "mat-user__chev")
+                    </button>
+                    <button type="button" class="mat-theme" data-theme-toggle data-theme-save-url="/api/theme" data-theme-state="system" aria-label="Darstellung: System. Klicken für Hell." title="Darstellung: System. Klicken für Hell.">
+                        <svg class="mat-icon" data-theme-icon="system" aria-hidden="true" focusable="false"><use href="#mat-i-monitor"></use></svg>
+                        <svg class="mat-icon" data-theme-icon="light" aria-hidden="true" focusable="false"><use href="#mat-i-sun"></use></svg>
+                        <svg class="mat-icon" data-theme-icon="dark" aria-hidden="true" focusable="false"><use href="#mat-i-moon"></use></svg>
+                    </button>
+                </div>
+                <div class="mat-nav__version">@shell.Version</div>
+            </div>
+        </aside>
+
+        <div class="mat-main">
+            <header class="mat-topbar">
+                <button type="button" class="mat-burger" data-nav-toggle aria-label="Menü öffnen" aria-controls="mat-nav" aria-expanded="false">@Ui.Icon("menu")</button>
+                <nav class="mat-crumbs" aria-label="Brotkrumen">
+                    <ol>
+                        @if (crumbs.Count == 0)
+                        {
+                            <li aria-current="page">MatSMTP</li>
+                        }
+                        else
+                        {
+                            <li><a href="@shell.HomeHref">MatSMTP</a></li>
+                            @for (var i = 0; i < crumbs.Count; i++)
+                            {
+                                var c = crumbs[i];
+                                if (i == crumbs.Count - 1)
+                                {
+                                    <li aria-current="page">@c.Text</li>
+                                }
+                                else if (c.Url is null)
+                                {
+                                    <li><span>@c.Text</span></li>
+                                }
+                                else
+                                {
+                                    <li><a href="@c.Url">@c.Text</a></li>
+                                }
+                            }
+                        }
+                    </ol>
+                </nav>
+                <div class="mat-topbar__actions">
+                    @await RenderSectionAsync("TopbarActions", required: false)
+                </div>
+            </header>
+
+            @* Shown by app.js while there is no connection; the page stays usable to read, saving waits for the connection. *@
+            <div class="mat-alert mat-alert--warning ms-offline" role="status" data-offline-banner hidden>
+                @Ui.Icon("wifi-off")
+                <div class="mat-alert__body"><strong>Keine Verbindung.</strong> <span data-offline-text>Du siehst den zuletzt geladenen Stand. Speichern ist möglich, sobald die Verbindung zurück ist.</span></div>
+                <div class="mat-alert__actions"><button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-reconnect>@Ui.Icon("refresh")<span>Erneut verbinden</span></button></div>
+            </div>
+
+            <main class="mat-page @(width == "narrow" ? "mat-page--narrow" : width == "wide" ? "mat-page--wide" : "")" id="main">
+                @if (!ownHead)
+                {
+                    <div class="mat-page__head">
+                        <div class="mat-page__title">
+                            <h1>@title</h1>
+                            @if (!string.IsNullOrEmpty(sub))
+                            {
+                                <p class="mat-page__sub">@sub</p>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @RenderBody()
+            </main>
+
+            <footer class="mat-footer">
+                <p class="mat-footer__text">MatSMTP · SMTP-Relay mit Regeln, Warteschlange und Webhooks</p>
+            </footer>
+        </div>
+    </div>
+
+    <div class="mat-menu" id="user-menu" role="menu" aria-label="@shell.UserName" hidden>
+        <div class="mat-menu__head">
+            <span class="mat-avatar" aria-hidden="true">@Ui.Initials(shell.UserName)</span>
+            <div><strong>@shell.UserName</strong><small>@shell.UserLine</small></div>
+        </div>
+        @foreach (var item in shell.UserMenu)
+        {
+            if (item.SeparatorBefore)
+            {
+                <div class="mat-menu__sep" role="separator"></div>
+            }
+
+            if (item.Post)
+            {
+                <form method="post" action="@item.Href">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="mat-menu__item @(item.Danger ? "mat-menu__item--danger" : "")" role="menuitem">@Ui.Icon(item.Icon)<span>@item.Title</span></button>
+                </form>
+            }
+            else
+            {
+                <a class="mat-menu__item @(item.Danger ? "mat-menu__item--danger" : "")" role="menuitem" href="@item.Href">@Ui.Icon(item.Icon)<span>@item.Title</span></a>
+            }
+        }
+    </div>
+
+    <partial name="_MenuSwitchPopup" model="(shell, active)" />
+
+    @* After a save the page redirects and shows what was done as a toast. *@
+    @if (TempData["Flash"] is string flash)
+    {
+        <div data-toast="@flash" data-tone="success" hidden></div>
+    }
+    @if (TempData["Error"] is string error)
+    {
+        <div data-toast="@error" data-tone="error" hidden></div>
+    }
+
+    <script src="~/ui/matui.js?v=@Sprite.Hash"></script>
+    <script src="~/js/app.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

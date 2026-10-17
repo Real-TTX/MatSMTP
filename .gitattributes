@@ -1,0 +1,14 @@
+# Normalize line endings: LF in the repository, auto-convert on checkout.
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.ico binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
+*.docx binary
+*.zip binary
+*.msbackup binary
+*.woff2 binary

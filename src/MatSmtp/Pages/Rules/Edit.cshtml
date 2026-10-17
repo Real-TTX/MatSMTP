@@ -1,0 +1,73 @@
+@page
+@model MatSmtp.Pages.Rules.EditModel
+@using MatSmtp.Core.Relay
+@{
+    var actions = Controls.Options.Of<RuleAction>(Labels.Of);
+    var auths = Controls.Options.Of<AuthCondition>(Labels.Of);
+}
+
+<form class="mat-form" method="post" asp-page-handler="" novalidate>
+    <input type="hidden" name="Id" value="@Model.Id" />
+    <ms-summary />
+
+    <ms-card title="Regel" icon="route">
+        <div class="mat-form__grid">
+            <ms-input for="Input.Name" label="Name" required="true" hint="Zum Beispiel „Shop über Microsoft 365“." />
+            <ms-input for="Input.Description" label="Beschreibung (optional)" />
+            <ms-switch for="Input.IsEnabled" label="Aktiv" full="true" />
+        </div>
+    </ms-card>
+
+    <ms-card title="Wenn" icon="filter" sub="leere Bedingungen werden nicht geprüft, alle anderen müssen passen">
+        <p class="mat-muted">Muster: <span class="mat-mono">*</span> für alle, <span class="mat-mono">firma.de</span> für eine Domain, <span class="mat-mono">*.firma.de</span> für Subdomains, <span class="mat-mono">app-*@@firma.de</span> mit Platzhalter, <span class="mat-mono">/regex/</span> als regulärer Ausdruck. Mehrere Einträge mit Zeilenumbruch oder Komma: einer genügt.</p>
+        <div class="mat-form__grid">
+            <ms-textarea for="Input.MatchSenders" label="Absender" rows="2" hint="Umschlag-Absender (MAIL FROM) oder Von-Kopfzeile." />
+            <ms-textarea for="Input.MatchRecipients" label="Empfänger" rows="2" hint="Mindestens ein Empfänger muss passen." />
+            <ms-textarea for="Input.MatchNetworks" label="IP-Adresse oder Netz des Clients" rows="2" hint="Zum Beispiel 10.0.5.0/24 oder 192.168.1.20" />
+            <ms-textarea for="Input.MatchSubject" label="Betreff enthält" rows="2" hint="Text oder /regex/" />
+            <ms-select for="Input.MatchAuth" label="Anmeldung" items="auths" />
+            <ms-select for="Input.MatchRelayUserId" label="Nur dieser Zugang (optional)" items="Model.RelayUsers" empty="Jeder Zugang" show-if="Input.MatchAuth" show-value="Authenticated" />
+        </div>
+    </ms-card>
+
+    <ms-card title="Dann" icon="send">
+        <div class="mat-form__grid">
+            <ms-select for="Input.Action" label="Entscheidung" items="actions" full="true" hint="„Nur ändern, weiter prüfen“ wendet die Änderungen unten an und fragt die nächste Regel. Alle anderen beenden die Prüfung." />
+            <ms-select for="Input.AccountId" label="Über das Konto" items="Model.Accounts" empty="Standardkonto" full="true" show-if="Input.Action" show-value="Relay" />
+            <ms-input for="Input.RejectMessage" label="Antwort an die Anwendung" full="true" show-if="Input.Action" show-value="Reject" hint="Steht im SMTP-Fehler 550. Leer: „Die Nachricht wurde durch eine Regel abgewiesen.“" />
+            <ms-select for="Input.WebhookId" label="Webhook aufrufen" items="Model.Webhooks" empty="Keinen" full="true" show-if="Input.Action" show-value="Relay,Continue,WebhookOnly" hint="Der Webhook bekommt die Nachricht zusätzlich (bei „Nur an Webhook“ ausschließlich)." />
+        </div>
+    </ms-card>
+
+    <ms-card title="Absender umschreiben" icon="edit" sub="optional">
+        <div data-show-if="Input.Action" data-show-value="Relay,Continue,WebhookOnly">
+            <div class="mat-form__grid">
+                <ms-input for="Input.RewriteFrom" label="Neuer Absender" hint="noreply@@firma.de ersetzt ihn, {local}@@firma.de behält den Teil vor dem @@, firma.de ist kurz für {local}@@firma.de." />
+                <ms-input for="Input.RewriteFromName" label="Neuer Anzeigename" hint="Leer: der Name bleibt." />
+                <ms-switch for="Input.RewriteHeader" label="Auch die Von-Kopfzeile ändern" hint="Sonst nur den Umschlag-Absender (MAIL FROM, für Rückläufer)." />
+                <ms-switch for="Input.ReplyToOriginal" label="Antworten an den alten Absender" hint="Setzt Reply-To auf den ursprünglichen Absender, wenn die Nachricht keines hat." />
+            </div>
+        </div>
+        <p class="mat-muted" data-show-if="Input.Action" data-show-value="Reject,Drop">Eine abgewiesene oder verworfene Nachricht wird nicht verändert.</p>
+    </ms-card>
+
+    <ms-card title="Blindkopie" icon="copy" sub="optional">
+        <div data-show-if="Input.Action" data-show-value="Relay,Continue">
+            <div class="mat-form__grid">
+                <ms-textarea for="Input.AddBcc" label="Blindkopie an" rows="2" full="true" hint="Diese Adressen bekommen die Nachricht zusätzlich, ohne dass die Empfänger es sehen (zum Beispiel ein Archiv)." />
+            </div>
+        </div>
+        <p class="mat-muted" data-show-if="Input.Action" data-show-value="WebhookOnly,Reject,Drop">Nur beim Versenden.</p>
+    </ms-card>
+
+    @if (Model.Item is not null)
+    {
+        <ms-buttons back-href="/Rules" delete-url="@Url.Page("/Rules/Edit", "Delete", new { id = Model.Id })" delete-confirm="Diese Regel löschen?">
+            <a class="mat-btn mat-btn--secondary" href="/Rules/Edit?copy=@Model.Id">@Ui.Icon("copy")<span>Kopieren</span></a>
+        </ms-buttons>
+    }
+    else
+    {
+        <ms-buttons back-href="/Rules" />
+    }
+</form>

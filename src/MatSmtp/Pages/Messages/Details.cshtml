@@ -1,0 +1,232 @@
+@page
+@model MatSmtp.Pages.Messages.DetailsModel
+@using MatSmtp.Core.Relay
+@{
+    var m = Model.Item;
+}
+
+@if (m.Status == MessageStatus.Failed && m.LastError is not null)
+{
+    <div class="mat-alert mat-alert--danger" role="alert">
+        @Ui.Icon("x-circle")
+        <div class="mat-alert__body"><strong>Nicht versendet.</strong> <span>@m.LastError</span></div>
+    </div>
+}
+else if (m.Status == MessageStatus.Deferred)
+{
+    <div class="mat-alert mat-alert--warning" role="status">
+        @Ui.Icon("refresh")
+        <div class="mat-alert__body"><strong>Verzögert.</strong> <span>@m.LastError Nächster Versuch @Fmt.Moment(m.NextAttemptDate).</span></div>
+    </div>
+}
+else if (m.Status == MessageStatus.Rejected)
+{
+    <div class="mat-alert mat-alert--warning" role="status">
+        @Ui.Icon("ban")
+        <div class="mat-alert__body"><strong>Abgewiesen.</strong> <span>@m.LastError</span></div>
+    </div>
+}
+
+<div class="ms-split">
+    <div class="ms-cards">
+        <ms-card title="Umschlag" icon="mail">
+            <dl class="mat-kv">
+                <dt>Absender</dt><dd class="mat-mono">@(m.EnvelopeFrom.Length > 0 ? m.EnvelopeFrom : "<> (leer)")</dd>
+                @if (m.OriginalFrom is not null)
+                {
+                    <dt>Ursprünglich</dt><dd class="mat-mono">@m.OriginalFrom</dd>
+                }
+                @if (m.HeaderFrom is not null)
+                {
+                    <dt>Von (Kopfzeile)</dt><dd>@m.HeaderFrom</dd>
+                }
+                <dt>Empfänger</dt><dd class="mat-mono ms-prewrap">@m.Recipients.Replace(", ", "\n")</dd>
+                @if (m.Bcc is not null)
+                {
+                    <dt>Blindkopie (Regel)</dt><dd class="mat-mono">@m.Bcc</dd>
+                }
+                <dt>Betreff</dt><dd>@(m.Subject ?? "–")</dd>
+                @if (m.MessageIdHeader is not null)
+                {
+                    <dt>Message-ID</dt><dd class="mat-mono ms-break">@m.MessageIdHeader</dd>
+                }
+                <dt>Größe</dt><dd>@Fmt.FileSize(m.SizeBytes)</dd>
+            </dl>
+        </ms-card>
+
+        @if (Model.HasContent)
+        {
+            <ms-card title="Inhalt" icon="file-text">
+                <ms-tabs id="content" label="Inhalt der Nachricht">
+                    <ms-tab id="text" title="Text">
+                        @if (Model.TextBody is { Length: > 0 })
+                        {
+                            <pre class="ms-pre">@Model.TextBody</pre>
+                        }
+                        else
+                        {
+                            <p class="mat-muted">@(Model.HasHtml ? "Die Nachricht hat nur einen HTML-Teil. Lade sie herunter, um sie in einem Mailprogramm zu sehen." : "Kein Textteil.")</p>
+                        }
+                        @if (Model.Attachments.Count > 0)
+                        {
+                            <h3 class="ms-subhead">Anhänge</h3>
+                            <ul class="ms-plainlist">
+                                @foreach (var a in Model.Attachments)
+                                {
+                                    <li>@Ui.Icon("paperclip") @a</li>
+                                }
+                            </ul>
+                        }
+                    </ms-tab>
+                    <ms-tab id="headers" title="Kopfzeilen" count="@Model.Headers.Count">
+                        <div class="mat-table-wrap">
+                            <table class="mat-table mat-table--compact" id="headers-table">
+                                <caption class="mat-sr-only">Kopfzeilen der Nachricht</caption>
+                                <thead><tr><th scope="col">Name</th><th scope="col">Wert</th></tr></thead>
+                                <tbody>
+                                    @foreach (var h in Model.Headers)
+                                    {
+                                        <tr><td data-label="Name" class="mat-mono">@h.Name</td><td data-label="Wert" class="ms-break">@h.Value</td></tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </ms-tab>
+                </ms-tabs>
+            </ms-card>
+        }
+
+        <ms-card title="Verlauf" icon="history">
+            <ul class="ms-notes">
+                @foreach (var e in m.Events)
+                {
+                    <li class="ms-note">
+                        @Ui.Icon(Labels.Icon(e.Level), "ms-note__icon ms-note__icon--" + Labels.Tone(e.Level))
+                        <div class="ms-note__body">
+                            <span class="ms-break">@e.Text</span>
+                            <span class="ms-note__meta">@Fmt.Moment(e.OccurredDate):@Fmt.Local(e.OccurredDate).ToString("ss")</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+        </ms-card>
+
+        @if (m.WebhookDeliveries.Count > 0)
+        {
+            <ms-card title="Webhooks" icon="plug">
+                <div class="mat-table-wrap">
+                    <table class="mat-table" id="hooks-table">
+                        <caption class="mat-sr-only">Aufrufe der Webhooks</caption>
+                        <thead><tr><th scope="col">Webhook</th><th scope="col" class="mat-num">Versuche</th><th scope="col" class="mat-hide-sm">Antwort</th><th scope="col">Status</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in m.WebhookDeliveries)
+                            {
+                                <tr>
+                                    <td data-label="Webhook">@d.WebhookName</td>
+                                    <td data-label="Versuche" class="mat-num">@d.Attempts</td>
+                                    <td data-label="Antwort" class="mat-hide-sm">@(d.ResponseCode is { } code ? $"HTTP {code}" : d.LastError ?? "–")</td>
+                                    <td data-label="Status">@Labels.Pill(d.Status)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </ms-card>
+        }
+    </div>
+
+    <aside class="ms-cards">
+        <ms-card title="Zustellung" icon="send">
+            <dl class="mat-kv">
+                <dt>Status</dt><dd>@Labels.Pill(m.Status)</dd>
+                <dt>Entscheidung</dt><dd>@Labels.Of(m.Action)</dd>
+                <dt>Regeln</dt><dd>@(m.Rules ?? "keine passte")</dd>
+                <dt>Konto</dt><dd>@(m.AccountName ?? (m.Action == RuleAction.Relay ? "Standardkonto" : "–"))</dd>
+                <dt>Versuche</dt><dd>@m.Attempts</dd>
+                @if (m.NextAttemptDate is not null && !m.IsFinal)
+                {
+                    <dt>Nächster Versuch</dt><dd>@Fmt.Moment(m.NextAttemptDate)</dd>
+                }
+                @if (m.SentDate is not null)
+                {
+                    <dt>Zugestellt</dt><dd>@Fmt.Moment(m.SentDate)</dd>
+                }
+                @if (m.RemoteResponse is not null)
+                {
+                    <dt>Antwort des Servers</dt><dd class="mat-mono ms-break">@m.RemoteResponse</dd>
+                }
+            </dl>
+        </ms-card>
+
+        <ms-card title="Herkunft" icon="network">
+            <dl class="mat-kv">
+                <dt>Client</dt><dd class="mat-mono">@(m.ClientIp ?? "unbekannt")</dd>
+                @if (m.HeloName is not null)
+                {
+                    <dt>HELO</dt><dd class="mat-mono ms-break">@m.HeloName</dd>
+                }
+                <dt>Anmeldung</dt><dd>@(m.AuthUser is null ? "ohne (vertrauenswürdiges Netz)" : "Zugang " + m.AuthUser)</dd>
+                <dt>Port</dt><dd>@m.ServerPort@(m.IsTls ? " · TLS" : " · unverschlüsselt")</dd>
+                <dt>Empfangen</dt><dd>@Fmt.Moment(m.ReceivedDate)</dd>
+            </dl>
+        </ms-card>
+
+        @if (Model.CanShare)
+        {
+            <ms-card title="Freigabe" icon="share">
+                <p class="mat-muted">Ein Link zeigt jemandem ohne Konto, ob und wann die Nachricht zugestellt wurde: Absender, Empfänger, Betreff, Status und Verlauf, nie den Inhalt.</p>
+                @foreach (var link in Model.Links)
+                {
+                    var active = link.RevokedDate is null && link.ExpiresDate > Model.Now;
+                    <div class="ms-link">
+                        <div class="ms-link__text">
+                            @if (active)
+                            {
+                                <span class="mat-mono ms-break" id="link-@link.Id">@Model.ShareLinkOf(link)</span>
+                                <small class="mat-muted">@ShareService.Remaining(link, Model.Now) · @Ui.Plural(link.Views, "Aufruf", "Aufrufe")@(link.Note is null ? "" : " · " + link.Note)</small>
+                            }
+                            else
+                            {
+                                <span class="mat-muted">@(link.RevokedDate is null ? "Abgelaufen" : "Widerrufen") am @Fmt.Date(link.RevokedDate ?? link.ExpiresDate)@(link.Note is null ? "" : " · " + link.Note)</span>
+                            }
+                        </div>
+                        @if (active)
+                        {
+                            <div class="ms-link__tools">
+                                <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-copy="#link-@link.Id" aria-label="Link kopieren" data-tip="Link kopieren">@Ui.Icon("copy")</button>
+                                <form method="post" asp-page-handler="Revoke" asp-route-id="@m.Id" asp-route-linkId="@link.Id">
+                                    <button type="submit" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" aria-label="Link widerrufen" data-tip="Widerrufen" data-confirm="Diesen Link widerrufen? Er zeigt danach nichts mehr." data-confirm-ok="Widerrufen">@Ui.Icon("ban")</button>
+                                </form>
+                            </div>
+                        }
+                    </div>
+                }
+                <form method="post" asp-page-handler="Share" asp-route-id="@m.Id" class="mat-form ms-share-form">
+                    <div class="mat-form__grid">
+                        <ms-input for="ShareDays" label="Gültig (Tage)" type="number" />
+                        <ms-input for="ShareNote" label="Notiz (optional)" hint="Für wen der Link ist" />
+                    </div>
+                    <div class="mat-actions">
+                        <button type="submit" class="mat-btn mat-btn--secondary">@Ui.Icon("link")<span>Link anlegen</span></button>
+                    </div>
+                </form>
+            </ms-card>
+        }
+    </aside>
+</div>
+
+<form method="post" asp-route-id="@m.Id">
+    <div class="mat-btn-row">
+        @if (Model.CanRetry)
+        {
+            <button type="submit" asp-page-handler="Retry" class="mat-btn mat-btn--primary">@Ui.Icon("refresh")<span>Erneut senden</span></button>
+        }
+        @if (Model.HasContent)
+        {
+            <a class="mat-btn mat-btn--secondary" href="/messages/@m.Id/eml" download>@Ui.Icon("download")<span>Herunterladen (.eml)</span></a>
+        }
+        <a class="mat-btn mat-btn--secondary" href="/Messages">@Ui.Icon("back")<span>Zurück</span></a>
+        <span class="mat-btn-row__spacer"></span>
+        <button type="submit" asp-page-handler="Delete" class="mat-btn mat-btn--danger" data-confirm="Diese Nachricht löschen? Ihr Inhalt und ihr Verlauf sind dann weg." data-confirm-ok="Löschen">@Ui.Icon("trash")<span>Löschen</span></button>
+    </div>
+</form>

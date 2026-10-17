@@ -1,0 +1,16 @@
+@page
+@model MatSmtp.Pages.Admin.SharesModel
+
+<div class="mat-list" data-selectable>
+    <partial name="_Toolbar" model="Model.Toolbar" />
+    <partial name="_Table" model="Model.Table" />
+    <partial name="_Pager" model="Model.Pager" />
+    @if (Model.Table.Rows.Count > 0)
+    {
+        <form class="mat-actions" id="@MatSmtp.Pages.Admin.SharesModel.BulkForm" method="post">
+            <span class="mat-muted ms-bulk-count" aria-live="polite"><strong data-bulk-count>0</strong> ausgewählt</span>
+            <span class="mat-btn-row__spacer"></span>
+            <button type="submit" asp-page-handler="Revoke" class="mat-btn mat-btn--danger" data-confirm="Die ausgewählten Links widerrufen? Sie zeigen danach nichts mehr." data-confirm-ok="Widerrufen">@Ui.Icon("ban")<span>Widerrufen</span></button>
+        </form>
+    }
+</div>

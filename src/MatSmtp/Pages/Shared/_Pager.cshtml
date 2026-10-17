@@ -1,0 +1,45 @@
+@model PagerModel
+@*
+    Pagination: directly under the table, nothing in between. It renders nothing for one page or none.
+*@
+@if (Model.Pages > 1)
+{
+    <nav class="mat-pager" aria-label="Seiten">
+        <span class="mat-pager__info">@Model.From bis @Model.To von @Model.Total</span>
+        <div class="mat-pager__pages">
+            @if (Model.Page > 1)
+            {
+                <a class="mat-pager__btn" href="@Model.Url(Model.Page - 1)" aria-label="Vorherige Seite" rel="prev">@Ui.Icon("chevron-left")</a>
+            }
+            else
+            {
+                <span class="mat-pager__btn is-disabled" aria-hidden="true">@Ui.Icon("chevron-left")</span>
+            }
+
+            @foreach (var p in Model.Window())
+            {
+                if (p == 0)
+                {
+                    <span class="mat-pager__gap" aria-hidden="true">…</span>
+                }
+                else if (p == Model.Page)
+                {
+                    <span class="mat-pager__btn is-current" aria-current="page">@p</span>
+                }
+                else
+                {
+                    <a class="mat-pager__btn" href="@Model.Url(p)" aria-label="Seite @p">@p</a>
+                }
+            }
+
+            @if (Model.Page < Model.Pages)
+            {
+                <a class="mat-pager__btn" href="@Model.Url(Model.Page + 1)" aria-label="Nächste Seite" rel="next">@Ui.Icon("chevron-right")</a>
+            }
+            else
+            {
+                <span class="mat-pager__btn is-disabled" aria-hidden="true">@Ui.Icon("chevron-right")</span>
+            }
+        </div>
+    </nav>
+}

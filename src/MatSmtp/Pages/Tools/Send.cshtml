@@ -1,0 +1,24 @@
+@page
+@model MatSmtp.Pages.Tools.SendModel
+
+<form class="mat-form" method="post" novalidate>
+    <ms-summary />
+    <ms-card title="Nachricht" icon="mail">
+        <div class="mat-form__grid">
+            <ms-input for="Input.From" label="Absender" type="email" required="true" />
+            <ms-textarea for="Input.To" label="Empfänger" rows="2" required="true" hint="Einer pro Zeile oder mit Komma getrennt." />
+            <ms-input for="Input.Subject" label="Betreff" full="true" />
+            <ms-textarea for="Input.Body" label="Text" rows="5" full="true" />
+        </div>
+    </ms-card>
+    <ms-card title="Als käme sie von" icon="network" sub="für die Regeln">
+        <div class="mat-form__grid">
+            <ms-input for="Input.ClientIp" label="IP-Adresse des Clients" hint="Nur für die Regeln; die Nachricht kommt tatsächlich von der Weboberfläche." />
+            <ms-input for="Input.AuthUser" label="Zugang (optional)" hint="Leer: ohne Anmeldung." />
+        </div>
+    </ms-card>
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("send")<span>Einliefern</span></button>
+        <a class="mat-btn mat-btn--secondary" href="/">@Ui.Icon("back")<span>Zurück</span></a>
+    </div>
+</form>

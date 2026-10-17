@@ -1,0 +1,154 @@
+@page
+@model MatSmtp.Pages.IndexModel
+@{
+    var l = Model.Listener;
+}
+
+@if (!l.Running)
+{
+    <div class="mat-alert mat-alert--danger" role="alert">
+        @Ui.Icon("x-circle")
+        <div class="mat-alert__body">
+            <strong>Der Empfang läuft nicht.</strong>
+            <span>@(l.Error ?? "Unbekannter Grund.")</span>
+            @if (Model.IsAdmin) { <span><a href="/Admin/Smtp">Empfang einstellen</a></span> }
+        </div>
+    </div>
+}
+@if (Model.Paused)
+{
+    <div class="mat-alert mat-alert--warning" role="status">
+        @Ui.Icon("pause")
+        <div class="mat-alert__body">
+            <strong>Der Versand ist pausiert.</strong>
+            <span>Nachrichten werden angenommen und warten in der Warteschlange.</span>
+            @if (Model.IsAdmin) { <span><a href="/Admin/Delivery">Versand fortsetzen</a></span> }
+        </div>
+    </div>
+}
+@if (!Model.HasDefaultAccount)
+{
+    <div class="mat-alert mat-alert--info" role="note">
+        @Ui.Icon("info")
+        <div class="mat-alert__body">
+            <strong>@(Model.HasAccounts ? "Es gibt kein aktives Standardkonto." : "Noch ein Schritt bis zur ersten Nachricht:")</strong>
+            @if (Model.IsAdmin)
+            {
+                <span>Lege unter <a href="/Accounts">SMTP-Konten</a> das Konto an, über das MatSMTP versendet, und mache es zum Standardkonto. Nachrichten, für die keine Regel ein Konto wählt, gehen darüber hinaus.</span>
+            }
+            else
+            {
+                <span>Ein Administrator muss ein SMTP-Konto als Standardkonto einrichten.</span>
+            }
+        </div>
+    </div>
+}
+
+<div class="ms-stats">
+    @Ui.Kpi("Heute empfangen", Fmt.Integer(Model.ReceivedToday), Model.RejectedToday > 0 ? $"{Model.RejectedToday} abgewiesen" : "Nachrichten", "inbox", href: "/Messages")
+    @Ui.Kpi("Heute versendet", Fmt.Integer(Model.SentToday), "über SMTP oder Webhook", "send", href: "/Messages?status=Sent")
+    @Ui.Kpi("Warteschlange", Fmt.Integer(Model.Waiting), Model.Deferred > 0 ? $"{Model.Deferred} verzögert" : "wartet auf Versand", "clock", href: "/Messages/Queue", bad: Model.Deferred > 0)
+    @Ui.Kpi("Fehlgeschlagen", Fmt.Integer(Model.FailedDay), "in 24 Stunden", "x-circle", href: "/Messages?status=Failed", bad: Model.FailedDay > 0)
+</div>
+
+<div class="mat-grid mat-grid--2">
+    <section class="mat-card" aria-labelledby="hours-title">
+        <div class="mat-card__head">@Ui.Icon("bar-chart")<h2 class="mat-card__title" id="hours-title">Empfangen in den letzten 24 Stunden</h2></div>
+        <div class="mat-card__body">
+            <ol class="ms-bars" aria-label="Nachrichten pro Stunde">
+                @foreach (var h in Model.Hours)
+                {
+                    <li class="ms-bars__item" data-tip="@h.Label Uhr: @h.Received empfangen@(h.Failed > 0 ? $", {h.Failed} fehlgeschlagen oder abgewiesen" : "")">
+                        <span class="ms-bars__track"><span class="ms-bars__bar" data-bar="@h.Percent">@if (h.Failed > 0) { <span class="ms-bars__fail" data-bar="@(h.Failed * 100 / Math.Max(1, h.Received))"></span> }</span></span>
+                        <span class="ms-bars__label" aria-hidden="true">@h.Label</span>
+                        <span class="mat-sr-only">@h.Label Uhr: @h.Received</span>
+                    </li>
+                }
+            </ol>
+        </div>
+    </section>
+
+    <section class="mat-card" aria-labelledby="listener-title">
+        <div class="mat-card__head">@Ui.Icon("inbox")<h2 class="mat-card__title" id="listener-title">Empfang</h2>@(l.Running ? Ui.Pill("läuft", "ok", "check") : Ui.Pill("gestoppt", "error", "x-circle"))</div>
+        <div class="mat-card__body">
+            <dl class="mat-kv">
+                <dt>Ports</dt><dd>@(l.Endpoints.Count == 0 ? "keine" : string.Join(" · ", l.Endpoints))</dd>
+                <dt>Servername</dt><dd class="mat-mono">@Model.Smtp.Hostname</dd>
+                <dt>Ohne Anmeldung</dt><dd>@(Model.Smtp.RequireAuth ? "niemand (Anmeldung immer nötig)" : string.IsNullOrWhiteSpace(Model.Smtp.TrustedNetworks) ? "niemand" : Model.Smtp.TrustedNetworks)</dd>
+                @if (Model.Certificate is { } c)
+                {
+                    <dt>Zertifikat</dt><dd>@c.Subject · bis @Fmt.Date(c.NotAfter)@(c.SelfSigned ? " · selbst signiert" : "")</dd>
+                }
+                @if (l.Since is { } since)
+                {
+                    <dt>Läuft seit</dt><dd>@Fmt.Moment(since)</dd>
+                }
+            </dl>
+            @if (Model.IsAdmin) { <p class="mat-hint"><a href="/Admin/Smtp">Empfang einstellen</a></p> }
+        </div>
+    </section>
+</div>
+
+<section class="mat-card" aria-labelledby="accounts-title">
+    <div class="mat-card__head">@Ui.Icon("server")<h2 class="mat-card__title" id="accounts-title">SMTP-Konten</h2></div>
+    <div class="mat-card__body">
+        @if (Model.Accounts.Count == 0)
+        {
+            <p class="mat-muted">Noch kein Konto.@if (Model.IsAdmin) { <text> <a href="/Accounts/Edit">Konto anlegen</a></text> }</p>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table" id="dash-accounts">
+                    <caption class="mat-sr-only">SMTP-Konten</caption>
+                    <thead><tr><th scope="col">Konto</th><th scope="col" class="mat-hide-sm">Server</th><th scope="col" class="mat-num">Heute</th><th scope="col" class="mat-num">Wartend</th><th scope="col">Zustand</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in Model.Accounts)
+                        {
+                            var a = row.Account;
+                            var failing = a.LastErrorDate is not null && (a.LastUsedDate is null || a.LastErrorDate > a.LastUsedDate);
+                            <tr>
+                                <td data-label="Konto">@Ui.NameWithSub(a.Name, Model.IsAdmin ? $"/Accounts/Edit?id={a.Id}" : null, a.IsDefault ? "Standardkonto" : null)</td>
+                                <td data-label="Server" class="mat-hide-sm">@Ui.Mono($"{a.Host}:{a.Port}")</td>
+                                <td data-label="Heute" class="mat-num">@Fmt.Integer(row.SentToday)</td>
+                                <td data-label="Wartend" class="mat-num">@Fmt.Integer(row.Waiting)</td>
+                                <td data-label="Zustand">@(!a.IsEnabled ? Ui.Pill("abgeschaltet", "plain") : failing ? Ui.Pill("Fehler", "error", "alert") : Ui.Pill("bereit", "ok", "check"))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+<section class="mat-card" aria-labelledby="recent-title">
+    <div class="mat-card__head">@Ui.Icon("inbox")<h2 class="mat-card__title" id="recent-title">Zuletzt empfangen</h2><a class="mat-card__sub" href="/Messages">Alle Nachrichten</a></div>
+    <div class="mat-card__body">
+        @if (Model.Recent.Count == 0)
+        {
+            <p class="mat-muted">Noch keine Nachricht. Trage MatSMTP in deiner Anwendung als Smarthost ein (Server und Port siehe „Empfang“)@if (Model.IsAdmin) { <text> oder schicke eine <a href="/Tools/Send">Testnachricht</a></text> }.</p>
+        }
+        else
+        {
+            <div class="mat-table-wrap">
+                <table class="mat-table" id="dash-recent">
+                    <caption class="mat-sr-only">Zuletzt empfangene Nachrichten</caption>
+                    <thead><tr><th scope="col">Empfangen</th><th scope="col">Absender</th><th scope="col" class="mat-hide-sm">Empfänger</th><th scope="col" class="mat-hide-sm">Betreff</th><th scope="col">Status</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in Model.Recent)
+                        {
+                            <tr>
+                                <td data-label="Empfangen"><a href="/Messages/Details?id=@m.Id">@Fmt.Moment(m.ReceivedDate)</a></td>
+                                <td data-label="Absender">@(m.EnvelopeFrom.Length > 0 ? m.EnvelopeFrom : "<>")</td>
+                                <td data-label="Empfänger" class="mat-hide-sm">@m.Recipients</td>
+                                <td data-label="Betreff" class="mat-hide-sm">@m.Subject</td>
+                                <td data-label="Status">@Labels.Pill(m.Status)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>

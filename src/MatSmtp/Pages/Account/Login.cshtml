@@ -1,0 +1,24 @@
+@page
+@model MatSmtp.Pages.Account.LoginModel
+@{
+    Layout = "_Bare";
+}
+
+<div class="mat-auth__card">
+    <div class="mat-auth__brand">
+        @Ui.Logo("lg")
+        <h1>MatSMTP</h1>
+        <p class="mat-muted">Anmelden</p>
+    </div>
+
+    <form class="mat-form" method="post" novalidate>
+        <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+        <ms-summary title="Die Anmeldung hat nicht geklappt." />
+        <ms-input for="Input.Email" label="E-Mail-Adresse" type="email" autocomplete="username" inputmode="email" autofocus />
+        <ms-input for="Input.Password" label="Passwort" type="password" autocomplete="current-password" />
+        <div class="mat-btn-row mat-btn-row--plain">
+            <button type="submit" class="mat-btn mat-btn--primary mat-btn--block">@Ui.Icon("login")<span>Anmelden</span></button>
+        </div>
+    </form>
+
+</div>

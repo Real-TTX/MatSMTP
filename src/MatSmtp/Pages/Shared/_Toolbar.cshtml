@@ -1,0 +1,137 @@
+@model ToolbarModel
+@*
+    The toolbar of a list, always ABOVE it: the search is a field in the bar, Filter and Sort are buttons at its right end that open dialogs.
+    All fields belong to the one GET form below (the inputs point to it with form="..."), so every dialog sends the complete state.
+    Several toolbars can share a page: every id is derived from Model.Id. Use it as the first child of <div class="mat-list">.
+*@
+@{
+    var id = Model.Id;
+    var form = id + "-form";
+    var hasChips = Model.ActiveFilters > 0;
+    var count = Model.Matching == Model.Total ? Ui.CountNoun(Model.Total, Model.Noun) : $"{Fmt.Integer(Model.Matching)} von {Ui.CountNoun(Model.Total, Model.Noun)}";
+}
+
+<div class="mat-toolbar" role="toolbar" aria-label="@Model.Label: Werkzeuge">
+    <div class="mat-input-icon mat-toolbar__search">
+        @Ui.Icon("search")
+        <input class="mat-input" type="search" id="@id-q" name="q" form="@form" value="@Model.Search" placeholder="@Model.SearchPlaceholder" aria-label="@Model.Label durchsuchen" autocomplete="off" enterkeyhint="search" data-shortcut="/" />
+    </div>
+
+    <span class="mat-toolbar__spacer"></span>
+    <span class="mat-toolbar__info" aria-live="polite">@count</span>
+    <div class="mat-toolbar__end">
+        @if (Model.Filters.Count > 0)
+        {
+            <button type="button" class="mat-btn mat-btn--ghost mat-toolbar__btn @(Model.ActiveFilters > 0 ? "is-active" : "")" data-dialog-open="@id-filter" aria-haspopup="dialog">
+                @Ui.Icon("sliders")<span>Filter</span>@if (Model.ActiveFilters > 0) { <span class="mat-badge">@Model.ActiveFilters</span> }
+            </button>
+        }
+
+        @if (Model.SortOptions.Count > 0)
+        {
+            <button type="button" class="mat-btn mat-btn--ghost mat-toolbar__btn @(Model.SortActive ? "is-active" : "")" data-dialog-open="@id-sort" aria-haspopup="dialog">
+                @Ui.Icon("sort")<span>Sortierung</span>@if (Model.SortActive) { <small>@Model.SortLabel @(Model.Descending ? "↓" : "↑")</small> }
+            </button>
+        }
+    </div>
+</div>
+
+@if (hasChips || Model.SearchActive)
+{
+    <div class="mat-chips" role="group" aria-label="Angewendete Werkzeuge">
+        @if (Model.SearchActive)
+        {
+            <span class="mat-chip">Suche: @Model.Search<a class="mat-chip__x" href="@Model.UrlWithout("q")" aria-label="Suche entfernen">@Ui.Icon("x")</a></span>
+        }
+        @foreach (var f in Model.Filters.Where(f => !string.IsNullOrEmpty(f.Selected)))
+        {
+            <span class="mat-chip">@f.Label: @(f.Options.FirstOrDefault(o => o.Value == f.Selected)?.Label ?? f.Selected)<a class="mat-chip__x" href="@Model.UrlWithout(f.Name)" aria-label="Filter @f.Label entfernen">@Ui.Icon("x")</a></span>
+        }
+    </div>
+}
+
+<form id="@form" method="get" action="@Model.Action" hidden>
+    @foreach (var (k, v) in Model.Keep.Where(p => !string.IsNullOrEmpty(p.Value)))
+    {
+        <input type="hidden" name="@k" value="@v" />
+    }
+</form>
+
+@if (Model.Filters.Count > 0)
+{
+    <dialog class="mat-dialog mat-dialog--sm" id="@id-filter" aria-labelledby="@id-filter-title">
+        <div class="mat-dialog__form">
+            <div class="mat-dialog__head">
+                @Ui.Icon("sliders")
+                <h2 class="mat-dialog__title" id="@id-filter-title">Filter</h2>
+                <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-dialog__close" data-dialog-close aria-label="Schließen">@Ui.Icon("x")</button>
+            </div>
+            <div class="mat-dialog__body mat-form">
+                @foreach (var f in Model.Filters)
+                {
+                    <div class="mat-field">
+                        <label class="mat-label" for="@id-f-@f.Name">@f.Label</label>
+                        <select class="mat-select" id="@id-f-@f.Name" name="@f.Name" form="@form">
+                            <option value="">Alle</option>
+                            @foreach (var o in f.Options)
+                            {
+                                <option value="@o.Value" selected="@(f.Selected == o.Value)">@o.Label</option>
+                            }
+                        </select>
+                    </div>
+                }
+                @if (Model.SearchActive || Model.SortActive)
+                {
+                    <p class="mat-hint">Die Suche und die Sortierung bleiben erhalten.</p>
+                }
+            </div>
+            <div class="mat-dialog__foot">
+                <div class="mat-btn-row mat-btn-row--plain">
+                    <button type="submit" form="@form" class="mat-btn mat-btn--primary">@Ui.Icon("sliders")<span>Anwenden</span></button>
+                    <button type="button" class="mat-btn mat-btn--secondary" data-dialog-close>Abbrechen</button>
+                    <span class="mat-btn-row__spacer"></span>
+                    <a class="mat-btn mat-btn--ghost mat-btn--end" href="@Model.Action">Alles zurücksetzen</a>
+                </div>
+            </div>
+        </div>
+    </dialog>
+}
+
+@if (Model.SortOptions.Count > 0)
+{
+    <dialog class="mat-dialog mat-dialog--sm" id="@id-sort" aria-labelledby="@id-sort-title">
+        <div class="mat-dialog__form">
+            <div class="mat-dialog__head">
+                @Ui.Icon("sort")
+                <h2 class="mat-dialog__title" id="@id-sort-title">Sortierung</h2>
+                <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-dialog__close" data-dialog-close aria-label="Schließen">@Ui.Icon("x")</button>
+            </div>
+            <div class="mat-dialog__body mat-form">
+                <fieldset class="mat-field mat-fieldset">
+                    <legend class="mat-label">Sortieren nach</legend>
+                    <div class="mat-options">
+                        @foreach (var o in Model.SortOptions)
+                        {
+                            <label class="mat-option"><input type="radio" id="@id-sort-by-@o.Value" name="sort" value="@o.Value" form="@form" checked="@((Model.Sort ?? Model.DefaultSort) == o.Value)" /><span>@o.Label</span></label>
+                        }
+                    </div>
+                </fieldset>
+                <fieldset class="mat-field mat-fieldset">
+                    <legend class="mat-label">Reihenfolge</legend>
+                    <div class="mat-options">
+                        <label class="mat-option"><input type="radio" id="@id-dir-asc" name="dir" value="asc" form="@form" checked="@(!Model.Descending)" /><span>Aufsteigend</span></label>
+                        <label class="mat-option"><input type="radio" id="@id-dir-desc" name="dir" value="desc" form="@form" checked="@Model.Descending" /><span>Absteigend</span></label>
+                    </div>
+                </fieldset>
+            </div>
+            <div class="mat-dialog__foot">
+                <div class="mat-btn-row mat-btn-row--plain">
+                    <button type="submit" form="@form" class="mat-btn mat-btn--primary">@Ui.Icon("sort")<span>Anwenden</span></button>
+                    <button type="button" class="mat-btn mat-btn--secondary" data-dialog-close>Abbrechen</button>
+                    <span class="mat-btn-row__spacer"></span>
+                    <a class="mat-btn mat-btn--ghost mat-btn--end" href="@Model.UrlWithout("sort")">Standardreihenfolge</a>
+                </div>
+            </div>
+        </div>
+    </dialog>
+}

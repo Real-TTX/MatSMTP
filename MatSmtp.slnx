@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MatSmtp.Core/MatSmtp.Core.csproj" />
+    <Project Path="src/MatSmtp/MatSmtp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MatSmtp.Tests/MatSmtp.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,33 @@
+@inject IconSprite Sprite
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@model (ShellModel Shell, string Title)
+@*
+    The <head> of every page: the toolkit (copied into wwwroot/ui, never loaded from another site), the boot script that applies the saved theme before
+    the first paint, the few styles of the app itself, and what makes MatSMTP an installable app (manifest, icons, the colours of the status bar).
+    The viewport allows zooming (accessibility): inputs are 16 px on a phone, so iOS does not zoom into a field by itself.
+*@
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    @* The status bar has the colour of the page behind it (the top bar), light or dark like the theme; app.js follows a theme chosen in the app. *@
+    <meta name="theme-color" content="#f5f4f1" media="(prefers-color-scheme: light)" data-theme-color="light" />
+    <meta name="theme-color" content="#151514" media="(prefers-color-scheme: dark)" data-theme-color="dark" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="application-name" content="MatSMTP" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="MatSMTP" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
+    @* The script of the app posts with this token (header RequestVerificationToken). *@
+    <meta name="ms-csrf" content="@Antiforgery.GetAndStoreTokens(Context).RequestToken" />
+    <title>@Model.Title · MatSMTP</title>
+    <link rel="manifest" href="~/manifest.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="~/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="~/img/favicon-32.png" />
+    <link rel="apple-touch-icon" href="~/img/apple-touch-icon.png" />
+    <script src="~/ui/matui.boot.js?v=@Sprite.Hash"></script>
+    <link rel="stylesheet" href="~/ui/matui.css?v=@Sprite.Hash" />
+    <link rel="stylesheet" href="~/css/app.css" asp-append-version="true" />
+</head>

@@ -1,0 +1,75 @@
+@model TableModel
+@*
+    The one table control. Every cell carries its data-label: on a phone the rows become cards. A table without rows shows the empty state instead.
+    Several tables can share a page: Model.Id makes the caption, the checks and the empty state unique.
+    With Model.SelectForm every row gets a check (data-select-row) that belongs to that form (the actions below the list); the header has the check for all.
+    Put the list into an element with data-selectable, so the toolkit marks the selected rows and counts them.
+*@
+@{
+    var selectable = Model.SelectForm is not null;
+}
+@if (Model.Rows.Count == 0)
+{
+    <div class="mat-empty" id="@Model.Id-empty">
+        <span class="mat-empty__icon">@Ui.Icon(Model.EmptyIcon)</span>
+        <div class="mat-empty__title">@Model.EmptyTitle</div>
+        <p>@Model.EmptyText</p>
+    </div>
+}
+else
+{
+    <div class="mat-table-wrap">
+        <table class="mat-table" id="@Model.Id">
+            <caption class="mat-sr-only">@Model.Caption</caption>
+            <thead>
+                <tr>
+                    @if (selectable)
+                    {
+                        <th scope="col" class="mat-table__select"><input type="checkbox" id="@Model.Id-all" data-select-all aria-label="Alle auswählen" /></th>
+                    }
+                    @foreach (var c in Model.Columns)
+                    {
+                        <th scope="col" class="@(c.Numeric ? "mat-num" : "") @(c.HideOnPhone ? "mat-hide-sm" : "")">@c.Header</th>
+                    }
+                    @if (Model.HasActions)
+                    {
+                        <th scope="col"><span class="mat-sr-only">Aktionen</span></th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @for (var r = 0; r < Model.Rows.Count; r++)
+                {
+                    var row = Model.Rows[r];
+                    <tr>
+                        @if (selectable)
+                        {
+                            <td data-label="Auswahl" class="mat-table__select">
+                                @if (row.SelectValue is not null)
+                                {
+                                    <input type="checkbox" id="@Model.Id-sel-@r" name="@Model.SelectName" value="@row.SelectValue" form="@Model.SelectForm" data-select-row aria-label="@(row.SelectLabel ?? "Auswählen")" />
+                                }
+                            </td>
+                        }
+                        @for (var i = 0; i < Model.Columns.Count; i++)
+                        {
+                            var c = Model.Columns[i];
+                            <td data-label="@c.Header" class="@(c.Numeric ? "mat-num" : "") @(c.Mono ? "mat-mono" : "") @(c.HideOnPhone ? "mat-hide-sm" : "")">@row.Cells[i]</td>
+                        }
+                        @if (Model.HasActions)
+                        {
+                            <td class="mat-table__cell-actions">
+                                <div class="mat-table__actions">
+                                    @foreach (var a in row.Actions)
+                                    {
+                                        <a class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" href="@a.Href" aria-label="@a.Label" data-tip="@a.Label">@Ui.Icon(a.Icon)</a>
+                                    }
+                                </div>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}

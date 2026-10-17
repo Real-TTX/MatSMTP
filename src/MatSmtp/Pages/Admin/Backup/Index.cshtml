@@ -1,0 +1,51 @@
+@page
+@model MatSmtp.Pages.Admin.Backup.IndexModel
+@{
+    var scopes = Controls.Options.Of<BackupScope>(MatSmtp.Pages.Admin.Backup.Plans.IndexModel.Of);
+}
+
+@if (Model.Running)
+{
+    <div class="mat-alert mat-alert--info" role="status">@Ui.Icon("refresh")<div class="mat-alert__body">Eine Sicherung läuft gerade. <a href="/Admin/Backup">Aktualisieren</a>, um das Ergebnis zu sehen.</div></div>
+}
+
+@if (Model.TargetCount == 0 || Model.Plans.Count == 0)
+{
+    <div class="mat-alert mat-alert--warning">@Ui.Icon("alert")<div class="mat-alert__body">
+        <strong>Es wird noch nichts automatisch gesichert.</strong>
+        @(Model.TargetCount == 0 ? "Lege ein Ziel an (zum Beispiel dein NAS) und danach einen Plan." : "Lege einen Plan an, der festlegt, was wann gesichert wird.")
+    </div></div>
+}
+else if (!Model.Enabled)
+{
+    <div class="mat-alert mat-alert--warning">@Ui.Icon("alert")<div class="mat-alert__body"><strong>Die geplanten Sicherungen sind angehalten.</strong> Es läuft nichts von selbst, bis du sie wieder einschaltest.</div></div>
+}
+
+<div class="ms-kpis">
+    @Ui.Kpi("Geplante Sicherung", Model.Enabled && Model.Plans.Any(p => p.IsEnabled) ? "an" : "aus", Ui.Plural(Model.Plans.Count(p => p.IsEnabled), "Plan aktiv", "Pläne aktiv"), "archive", Model.Enabled && Model.Plans.Any(p => p.IsEnabled) ? "ok" : "warn")
+    @Ui.Kpi("Zuletzt", Model.LastRun is null ? "noch nie" : Fmt.Date(Model.LastRun.StartDate), Model.LastRun is null ? null : Model.LastRun.Status == BackupRunStatus.Success ? "erfolgreich" : "fehlgeschlagen", "clock", Model.LastRun?.Status == BackupRunStatus.Failed ? "error" : "busy", bad: Model.LastRun?.Status == BackupRunStatus.Failed)
+    @Ui.Kpi("Als Nächstes", Model.Enabled && Model.NextRun is not null ? Fmt.Date(Model.NextRun) : "–", Model.Enabled && Model.NextRun is not null ? Fmt.Moment(Model.NextRun) : null, "calendar", "info")
+</div>
+
+<ms-card title="Sicherungen der letzten Zeit" icon="shield">
+    <partial name="_Table" model="Model.Runs" />
+    <partial name="_Pager" model="Model.Pager" />
+</ms-card>
+
+<div class="mat-actions">
+    <a class="mat-btn mat-btn--primary" href="/Admin/Backup/Plans">@Ui.Icon("calendar")<span>Pläne</span></a>
+    <a class="mat-btn mat-btn--secondary" href="/Admin/Backup/Targets">@Ui.Icon("hard-drive")<span>Ziele</span></a>
+    <a class="mat-btn mat-btn--secondary" href="/Admin/Backup/Restore">@Ui.Icon("upload")<span>Wiederherstellen</span></a>
+    <form method="post"><button type="submit" asp-page-handler="Toggle" class="mat-btn mat-btn--ghost">@Ui.Icon(Model.Enabled ? "pause" : "play")<span>@(Model.Enabled ? "Geplante Sicherung anhalten" : "Geplante Sicherung fortsetzen")</span></button></form>
+</div>
+
+<ms-card title="Jetzt eine Sicherung herunterladen" icon="download">
+    <form class="mat-form" method="post" asp-page-handler="Download">
+        <p class="mat-muted">Erstellt die Sicherung jetzt und lädt sie auf diesen Rechner herunter, zum Beispiel vor einem Update. Das Passwort ist optional.</p>
+        <div class="mat-form__grid">
+            <div class="mat-field"><label class="mat-label" for="scope">Umfang</label><select class="mat-select" id="scope" name="scope">@foreach (var s in scopes) { <option value="@s.Value">@s.Text</option> }</select></div>
+            <div class="mat-field"><label class="mat-label" for="passphrase">Passwort zum Verschlüsseln (optional)</label><input class="mat-input" id="passphrase" name="passphrase" type="password" autocomplete="new-password" /><span class="mat-error" aria-live="polite"></span></div>
+        </div>
+        <div class="mat-btn-row mat-btn-row--plain"><button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("download")<span>Sicherung herunterladen</span></button></div>
+    </form>
+</ms-card>

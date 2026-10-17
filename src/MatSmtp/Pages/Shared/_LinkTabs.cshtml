@@ -1,0 +1,16 @@
+@model LinkTabsModel
+@*
+    Tabs that are links: every tab is a page of its own (a list scope: today, this week, all), so the address says which one is open.
+    The toolkit styles .mat-tab.is-active. Several of these can share a page: the label names each group.
+*@
+<nav class="mat-tabs mat-tabs--pills ms-linktabs" aria-label="@Model.Label">
+    @foreach (var tab in Model.Tabs)
+    {
+        var active = tab.Key == Model.Selected;
+        <a class="mat-tab @(active ? "is-active" : "")" href="@tab.Href" aria-current="@(active ? "page" : null)">
+            @if (tab.Icon is not null) { @Ui.Icon(tab.Icon) }
+            <span>@tab.Title</span>
+            @if (tab.Count is { } count) { <span class="mat-badge mat-badge--soft">@count</span> }
+        </a>
+    }
+</nav>

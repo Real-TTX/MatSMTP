@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The part of MatSMTP that has no web types: the rules (patterns, networks, sender rewriting, the decision), the retry schedule of the spooler, TOTP and
+       password hashing. Everything in here is covered by unit tests without a browser, a database or a network. -->
+
+  <PropertyGroup>
+    <RootNamespace>MatSmtp.Core</RootNamespace>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MatSmtp.Tests" />
+  </ItemGroup>
+
+</Project>

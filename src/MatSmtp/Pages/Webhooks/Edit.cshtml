@@ -1,0 +1,72 @@
+@page
+@model MatSmtp.Pages.Webhooks.EditModel
+@using MatSmtp.Core.Relay
+@{
+    var payloads = Controls.Options.Of<WebhookPayload>(Labels.Of);
+}
+
+<form class="mat-form" method="post" asp-page-handler="" novalidate>
+    <input type="hidden" name="Id" value="@Model.Id" />
+    <ms-summary />
+    @if (Model.Result is not null)
+    {
+        <div class="mat-alert mat-alert--@(Model.ResultOk ? "success" : "danger")" role="status">@Ui.Icon(Model.ResultOk ? "check-circle" : "alert")<div class="mat-alert__body">@Model.Result</div></div>
+    }
+    @if (Model.Item?.LastError is { } error)
+    {
+        <div class="mat-alert mat-alert--warning" role="status">@Ui.Icon("alert")<div class="mat-alert__body"><strong>Letzter Aufruf (@Fmt.Moment(Model.Item.LastCallDate)) fehlgeschlagen:</strong> @error</div></div>
+    }
+
+    <ms-card title="Webhook" icon="plug">
+        <div class="mat-form__grid">
+            <ms-input for="Input.Name" label="Name" required="true" hint="Zum Beispiel „Ticketsystem“." />
+            <ms-input for="Input.Description" label="Beschreibung (optional)" />
+            <ms-input for="Input.Url" label="Adresse" type="url" required="true" full="true" hint="MatSMTP ruft sie per HTTP-POST mit JSON auf. Eine Antwort 2xx gilt als angenommen; sonst wird es wiederholt (nach 1, 5, 15, 60 Minuten)." />
+            <ms-select for="Input.Payload" label="Was der Webhook bekommt" items="payloads" full="true" />
+            <ms-switch for="Input.IsEnabled" label="Aktiv" />
+        </div>
+    </ms-card>
+
+    <ms-card title="Sicherheit und Aufruf" icon="shield">
+        <div class="mat-form__grid">
+            <ms-switch for="Input.Sign" label="Aufrufe signieren" full="true" hint="Kopfzeile X-MatSMTP-Signature: t=Zeitstempel, v1=HMAC-SHA256 über „Zeitstempel.Inhalt“. Der Empfänger rechnet nach und weiß, dass der Aufruf von MatSMTP kommt." />
+            <ms-input for="Input.Secret" label="Geheimnis" autocomplete="off" full="true" show-if="Input.Sign" show-value="true" hint="@(Model.HasSecret ? "Leer lassen, um das gespeicherte Geheimnis zu behalten." : "Vorschlag, frisch erzeugt. Trage dasselbe beim Empfänger ein.")" />
+            <ms-textarea for="Input.Headers" label="Zusätzliche Kopfzeilen (optional)" rows="3" full="true" hint="Eine pro Zeile, zum Beispiel Authorization: Bearer abc123" />
+            <ms-input for="Input.TimeoutSeconds" label="Zeitlimit (Sekunden)" type="number" />
+            <ms-input for="Input.MaxAttempts" label="Versuche" type="number" />
+        </div>
+    </ms-card>
+
+    @if (Model.Item is not null)
+    {
+        <ms-buttons back-href="/Webhooks" delete-url="@Url.Page("/Webhooks/Edit", "Delete", new { id = Model.Id })" delete-confirm="@(Model.RuleCount > 0 ? $"Diesen Webhook löschen? {Model.RuleCount} Regel(n) nennen ihn; sie rufen ihn dann nicht mehr auf." : "Diesen Webhook löschen?")">
+            <button type="submit" asp-page-handler="Test" class="mat-btn mat-btn--secondary">@Ui.Icon("activity")<span>Testaufruf</span></button>
+        </ms-buttons>
+    }
+    else
+    {
+        <ms-buttons back-href="/Webhooks">
+            <button type="submit" asp-page-handler="Test" class="mat-btn mat-btn--secondary">@Ui.Icon("activity")<span>Testaufruf</span></button>
+        </ms-buttons>
+    }
+</form>
+
+<ms-card title="So sieht ein Aufruf aus" icon="code">
+    <pre class="ms-pre">{
+  "event": "message.received",
+  "id": 123,
+  "receivedAt": "2026-10-18T09:30:00Z",
+  "client": { "ip": "10.0.0.12", "helo": "app01", "authUser": "shop", "tls": true },
+  "envelope": { "from": "shop@@firma.de", "to": ["kunde@@example.com"] },
+  "from": "Shop &lt;shop@@firma.de&gt;",
+  "subject": "Ihre Bestellung",
+  "messageId": "&lt;abc@@app01&gt;",
+  "size": 4211,
+  "rules": ["Shop über Microsoft 365"],
+  "action": "Relay",
+  "text": "…",          (bei „Inhalt“ und „Vollständig“)
+  "html": "…",
+  "attachments": [ { "fileName": "rechnung.pdf", "contentType": "application/pdf" } ],
+  "raw": "UmVjZWl2ZWQ6…"   (nur bei „Vollständig“: die .eml als Base64)
+}</pre>
+</ms-card>

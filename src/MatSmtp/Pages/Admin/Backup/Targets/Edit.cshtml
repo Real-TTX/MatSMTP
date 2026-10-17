@@ -1,0 +1,44 @@
+@page
+@model MatSmtp.Pages.Admin.Backup.Targets.EditModel
+@{
+    var kinds = new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
+    {
+        new("NAS (SMB-Freigabe)", nameof(BackupTargetKind.Smb)),
+        new("Ordner im Container oder Volume", nameof(BackupTargetKind.Local)),
+    };
+}
+
+<form class="mat-form" method="post" asp-page-handler="" novalidate>
+    <input type="hidden" name="Id" value="@Model.Id" />
+    <ms-summary />
+    @if (Model.Test is not null)
+    {
+        <div class="mat-alert mat-alert--@(Model.TestOk ? "success" : "danger")" role="status">@Ui.Icon(Model.TestOk ? "check-circle" : "alert")<div class="mat-alert__body">@Model.Test</div></div>
+    }
+
+    <ms-card title="Ziel" icon="hard-drive">
+        <div class="mat-form__grid">
+            <ms-input for="Input.Name" label="Name" required="true" hint="Zum Beispiel „NAS im Büro“." />
+            <ms-select for="Input.Kind" label="Art" items="kinds" />
+            <ms-input for="Input.Host" label="Server" hint="Name oder Adresse des NAS, zum Beispiel nas.local (SMB, Port 445)" show-if="Input.Kind" show-value="Smb" />
+            <ms-input for="Input.Share" label="Freigabe" hint="Der Name des freigegebenen Ordners, zum Beispiel Sicherungen" show-if="Input.Kind" show-value="Smb" />
+            <ms-input for="Input.Path" label="Ordner" full="true" hint="@("Bei einem NAS: ein Ordner in der Freigabe. Bei „Ordner“: ein Pfad, relativ zum Daten-Volume (leer: backups).")" />
+            <ms-input for="Input.Domain" label="Domäne (optional)" autocomplete="off" show-if="Input.Kind" show-value="Smb" />
+            <ms-input for="Input.UserName" label="Benutzername" autocomplete="off" show-if="Input.Kind" show-value="Smb" />
+            <ms-input for="Input.Password" label="Passwort" type="password" autocomplete="new-password" show-if="Input.Kind" show-value="Smb" hint="@(Model.HasPassword ? "Leer lassen, um das gespeicherte Passwort zu behalten." : "Wird verschlüsselt gespeichert.")" />
+        </div>
+    </ms-card>
+
+    @if (Model.Target is not null)
+    {
+        <ms-buttons back-href="/Admin/Backup/Targets" delete-url="@Url.Page("/Admin/Backup/Targets/Edit", "Delete", new { id = Model.Id })" delete-confirm="Dieses Ziel löschen? Die Sicherungen dort bleiben liegen.">
+            <button type="submit" formnovalidate asp-page-handler="Test" class="mat-btn mat-btn--secondary">@Ui.Icon("activity")<span>Prüfen</span></button>
+        </ms-buttons>
+    }
+    else
+    {
+        <ms-buttons back-href="/Admin/Backup/Targets">
+            <button type="submit" formnovalidate asp-page-handler="Test" class="mat-btn mat-btn--secondary">@Ui.Icon("activity")<span>Prüfen</span></button>
+        </ms-buttons>
+    }
+</form>

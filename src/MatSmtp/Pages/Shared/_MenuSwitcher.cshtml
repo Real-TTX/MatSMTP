@@ -1,0 +1,17 @@
+@model (ShellModel Shell, string? Active)
+@*
+    The button of the menu switcher (SHELL-15): at the foot of the menu, directly above the user (mat-nav__switch--foot). Its popup (_MenuSwitchPopup) is drawn at the end of
+    the page and opens upwards (data-menu-place="top"), because the button is at the bottom of the window.
+*@
+@{
+    var shell = Model.Shell;
+    var current = shell.CurrentMenu(Model.Active);
+}
+<div class="mat-nav__switch mat-nav__switch--foot">
+    <button type="button" class="mat-switcher" data-menu-toggle="nav-switch-menu" data-menu-place="top" aria-haspopup="menu" aria-expanded="false">
+        <span class="mat-switcher__icon">@Ui.Icon(current.Icon)</span>
+        <span class="mat-switcher__text"><small data-nav-label="Menü">Menü</small><span class="mat-switcher__name">@current.Title</span></span>
+        @Ui.Icon("chevron-up", "mat-switcher__chev")
+        <span class="mat-switcher__dot" hidden="@(!shell.Menus.Any(m => m != current && m.NeedsAttention))"></span>
+    </button>
+</div>

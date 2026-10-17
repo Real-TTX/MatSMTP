@@ -1,0 +1,75 @@
+@page
+@model MatSmtp.Pages.Accounts.EditModel
+@{
+    var securities = Controls.Options.Of<SmtpSecurity>(Labels.Of);
+}
+
+<form class="mat-form" method="post" asp-page-handler="" novalidate>
+    <input type="hidden" name="Id" value="@Model.Id" />
+    <ms-summary />
+    @if (Model.Result is not null)
+    {
+        <div class="mat-alert mat-alert--@(Model.ResultOk ? "success" : "danger")" role="status">@Ui.Icon(Model.ResultOk ? "check-circle" : "alert")<div class="mat-alert__body">@Model.Result</div></div>
+    }
+    @if (Model.Account?.LastError is { } error && Model.Account.LastErrorDate > (Model.Account.LastUsedDate ?? DateTime.MinValue))
+    {
+        <div class="mat-alert mat-alert--warning" role="status">@Ui.Icon("alert")<div class="mat-alert__body"><strong>Letzter Fehler (@Fmt.Moment(Model.Account.LastErrorDate)):</strong> @error</div></div>
+    }
+
+    <ms-card title="Konto" icon="server">
+        <div class="mat-form__grid">
+            <ms-input for="Input.Name" label="Name" required="true" hint="Zum Beispiel „Microsoft 365“ oder „Newsletter-Versand“." />
+            <ms-input for="Input.Description" label="Beschreibung (optional)" />
+            <ms-switch for="Input.IsDefault" label="Standardkonto" hint="Nachrichten, für die keine Regel ein Konto wählt, gehen hierüber. Es gibt nur ein Standardkonto." />
+            <ms-switch for="Input.IsEnabled" label="Aktiv" hint="Ein abgeschaltetes Konto sendet nichts; Regeln, die es wählen, nehmen das Standardkonto." />
+        </div>
+    </ms-card>
+
+    <ms-card title="Server" icon="globe">
+        <div class="mat-form__grid">
+            <ms-input for="Input.Host" label="Server" required="true" hint="Zum Beispiel smtp.office365.com" autocomplete="off" />
+            <ms-input for="Input.Port" label="Port" type="number" hint="587 mit STARTTLS, 465 mit TLS, 25 ohne" />
+            <ms-select for="Input.Security" label="Verschlüsselung" items="securities" hint="Automatisch: STARTTLS, wenn der Server es anbietet; TLS ab Beginn auf Port 465." />
+            <ms-input for="Input.TimeoutSeconds" label="Zeitlimit (Sekunden)" type="number" />
+        </div>
+    </ms-card>
+
+    <ms-card title="Anmeldung" icon="key">
+        <div class="mat-form__grid">
+            <ms-switch for="Input.UseAuth" label="Am Server anmelden" full="true" />
+            <ms-input for="Input.UserName" label="Benutzername" autocomplete="off" show-if="Input.UseAuth" show-value="true" />
+            <ms-input for="Input.Password" label="Passwort" type="password" autocomplete="new-password" show-if="Input.UseAuth" show-value="true" hint="@(Model.HasPassword ? "Leer lassen, um das gespeicherte Passwort zu behalten." : "Wird verschlüsselt gespeichert.")" />
+        </div>
+    </ms-card>
+
+    <ms-card title="Absender und Grenzen" icon="sliders">
+        <div class="mat-form__grid">
+            <ms-input for="Input.ForceFromAddress" label="Absender erzwingen (optional)" type="email" full="true" hint="Viele Anbieter senden nur mit ihrer eigenen Adresse. Ist sie gesetzt, geht jede Nachricht über dieses Konto mit diesem Absender hinaus; der ursprüngliche steht dann in Reply-To." />
+            <ms-input for="Input.MaxPerMinute" label="Höchstens pro Minute" type="number" hint="0 = keine Grenze. Darüber warten Nachrichten in der Warteschlange." />
+            <ms-input for="Input.MaxPerDay" label="Höchstens pro Tag" type="number" hint="0 = keine Grenze (gezählt über die letzten 24 Stunden)." />
+        </div>
+    </ms-card>
+
+    <ms-card title="Testnachricht" icon="send" sub="mit den Angaben oben, auch ungespeichert">
+        <p class="mat-muted">Schickt eine kurze Nachricht über dieses Konto, ohne Warteschlange und Regeln: so zeigt sich sofort, ob Server, Anmeldung und Absender passen.</p>
+        <div class="mat-form__grid">
+            <ms-input for="TestTo" label="An" type="email" inputmode="email" />
+        </div>
+        <div class="mat-actions">
+            <button type="submit" formnovalidate asp-page-handler="Test" class="mat-btn mat-btn--secondary">@Ui.Icon("send")<span>Testnachricht senden</span></button>
+        </div>
+    </ms-card>
+
+    @if (Model.Account is not null)
+    {
+        <ms-buttons back-href="/Accounts" delete-url="@Url.Page("/Accounts/Edit", "Delete", new { id = Model.Id })" delete-confirm="@(Model.RuleCount > 0 ? $"Dieses Konto löschen? {Model.RuleCount} Regel(n) nennen es; sie senden dann über das Standardkonto." : "Dieses Konto löschen?")">
+            <button type="submit" formnovalidate asp-page-handler="Check" class="mat-btn mat-btn--secondary">@Ui.Icon("activity")<span>Verbindung prüfen</span></button>
+        </ms-buttons>
+    }
+    else
+    {
+        <ms-buttons back-href="/Accounts">
+            <button type="submit" formnovalidate asp-page-handler="Check" class="mat-btn mat-btn--secondary">@Ui.Icon("activity")<span>Verbindung prüfen</span></button>
+        </ms-buttons>
+    }
+</form>

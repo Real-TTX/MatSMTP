@@ -1,0 +1,81 @@
+@page
+@model MatSmtp.Pages.Admin.Backup.Restore.IndexModel
+
+<div class="mat-alert mat-alert--warning">@Ui.Icon("alert")<div class="mat-alert__body">
+    <strong>Eine Wiederherstellung ersetzt alle Daten.</strong> Regeln, Konten, Zugänge, Webhooks, Nachrichten und Benutzer werden durch den Stand der Sicherung ersetzt. Vorher legt MatSMTP eine Sicherheitskopie des jetzigen Stands an.
+</div></div>
+
+<ms-card title="Von einem Ziel" icon="hard-drive">
+    @if (Model.Targets.Count == 0)
+    {
+        <p class="mat-muted">Es gibt noch kein Ziel. <a href="/Admin/Backup/Targets/Edit">Lege eines an</a>, oder lade unten eine Sicherungsdatei hoch.</p>
+    }
+    else
+    {
+        <form class="mat-form ms-diff__bar" method="get">
+            <div class="mat-field"><label class="mat-label" for="targetId">Ziel</label><select class="mat-select" id="targetId" name="targetId">@foreach (var t in Model.Targets) { <option value="@t.Value" selected="@t.Selected">@t.Text</option> }</select></div>
+            <button type="submit" class="mat-btn mat-btn--secondary">@Ui.Icon("list")<span>Sicherungen anzeigen</span></button>
+        </form>
+
+        @if (Model.ListError is not null)
+        {
+            <div class="mat-alert mat-alert--danger">@Ui.Icon("alert")<div class="mat-alert__body">@Model.ListError</div></div>
+        }
+        else if (Model.TargetId is not null)
+        {
+            @if (Model.Files.Count == 0)
+            {
+                <p class="mat-muted">An diesem Ziel liegt keine Sicherung.</p>
+            }
+            else
+            {
+                <form method="post" asp-page-handler="Fetch" class="mat-form">
+                    <input type="hidden" name="targetId" value="@Model.TargetId" />
+                    <div class="mat-table-wrap">
+                        <table class="mat-table" id="restore-files">
+                            <caption class="mat-sr-only">Sicherungen am Ziel</caption>
+                            <thead><tr><th scope="col">Sicherung</th><th scope="col" class="mat-hide-sm">Vom</th><th scope="col" class="mat-num mat-hide-sm">Größe</th><th scope="col" class="mat-col-actions"><span class="mat-sr-only">Aktionen</span></th></tr></thead>
+                            <tbody>
+                                @foreach (var f in Model.Files)
+                                {
+                                    <tr>
+                                        <td data-label="Sicherung"><span class="mat-mono">@f.Name</span>@(MatSmtp.Services.Backup.BackupNames.IsEncrypted(f.Name) ? " 🔒" : "")</td>
+                                        <td data-label="Vom" class="mat-hide-sm">@Fmt.Moment(f.CreatedUtc)</td>
+                                        <td data-label="Größe" class="mat-num mat-hide-sm">@Fmt.FileSize(f.Size)</td>
+                                        <td class="mat-col-actions"><button type="submit" name="name" value="@f.Name" class="mat-btn mat-btn--secondary mat-btn--sm">@Ui.Icon("upload")<span>Auswählen</span></button></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mat-field"><label class="mat-label" for="fetch-pass">Passwort (nur bei verschlüsselten Sicherungen)</label><input class="mat-input" id="fetch-pass" name="passphrase" type="password" autocomplete="off" /><span class="mat-error" aria-live="polite"></span></div>
+                </form>
+            }
+        }
+    }
+</ms-card>
+
+<ms-card title="Aus einer Datei" icon="upload">
+    <form class="mat-form" method="post" asp-page-handler="Upload" enctype="multipart/form-data">
+        <div class="mat-form__grid">
+            <div class="mat-field"><label class="mat-label" for="file">Sicherungsdatei</label><input class="mat-input" type="file" id="file" name="file" accept=".msbackup,.enc,.zip" required data-msg-required="Bitte wähle eine Datei aus." /><span class="mat-error" aria-live="polite"></span></div>
+            <div class="mat-field"><label class="mat-label" for="upload-pass">Passwort (nur bei verschlüsselten Sicherungen)</label><input class="mat-input" id="upload-pass" name="passphrase" type="password" autocomplete="off" /><span class="mat-error" aria-live="polite"></span></div>
+        </div>
+        <div class="mat-btn-row mat-btn-row--plain"><button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("upload")<span>Datei prüfen</span></button></div>
+    </form>
+</ms-card>
+
+@if (Model.SafetyCopies.Count > 0)
+{
+    <ms-card title="Sicherheitskopien früherer Wiederherstellungen" icon="shield">
+        <p class="mat-muted">Vor jeder Wiederherstellung wird der damalige Stand hier abgelegt (die drei neuesten). Damit lässt sich eine Wiederherstellung rückgängig machen.</p>
+        <form method="post" asp-page-handler="Safety">
+            <ul class="ms-comments">
+                @foreach (var f in Model.SafetyCopies.OrderByDescending(f => f.CreatedUtc))
+                {
+                    <li class="ms-comment"><div class="ms-comment__head"><span>@Fmt.Moment(f.CreatedUtc) · @Fmt.FileSize(f.Size)</span><button type="submit" name="name" value="@f.Name" class="mat-btn mat-btn--secondary mat-btn--sm">@Ui.Icon("upload")<span>Auswählen</span></button></div></li>
+                }
+            </ul>
+        </form>
+    </ms-card>
+}

@@ -1,0 +1,63 @@
+@page "/s/{token:guid}"
+@model MatSmtp.Pages.Share.IndexModel
+@{
+    Layout = "_Bare";
+}
+
+<div class="ms-share">
+    <header class="ms-share__bar">
+        <div class="ms-share__brand">@Ui.Logo()<strong>MatSMTP</strong><span class="mat-muted">Zustellnachweis</span></div>
+    </header>
+
+    @if (Model.State == ShareState.Unknown)
+    {
+        <div class="mat-empty mat-empty--framed"><span class="mat-empty__icon">@Ui.Icon("lock")</span><div class="mat-empty__title">Diesen Link gibt es nicht</div><p>Prüfe, ob die Adresse vollständig ist.</p></div>
+    }
+    else if (Model.State != ShareState.Active || Model.Item is null)
+    {
+        <div class="mat-empty mat-empty--framed"><span class="mat-empty__icon">@Ui.Icon("lock")</span><div class="mat-empty__title">@(Model.State == ShareState.Revoked ? "Dieser Link ist widerrufen" : "Dieser Link ist abgelaufen")</div><p>Bitte frage nach einem neuen Link.</p></div>
+    }
+    else
+    {
+        var m = Model.Item;
+        <h1 class="ms-share__title">@(m.Subject ?? "Nachricht ohne Betreff")</h1>
+        <p class="mat-muted">Dieser Link zeigt, ob und wann die Nachricht zugestellt wurde, nicht ihren Inhalt. Er ist @Model.RemainingText gültig.</p>
+
+        <ms-card title="Zustellung" icon="send">
+            <dl class="mat-kv">
+                <dt>Status</dt><dd>@Labels.Pill(m.Status)</dd>
+                <dt>Absender</dt><dd class="mat-mono">@(m.EnvelopeFrom.Length > 0 ? m.EnvelopeFrom : "<>")</dd>
+                <dt>Empfänger</dt><dd class="mat-mono ms-prewrap">@m.Recipients.Replace(", ", "\n")</dd>
+                <dt>Empfangen</dt><dd>@Fmt.Moment(m.ReceivedDate)</dd>
+                @if (m.SentDate is not null)
+                {
+                    <dt>Zugestellt</dt><dd>@Fmt.Moment(m.SentDate)</dd>
+                }
+                @if (m.RemoteResponse is not null)
+                {
+                    <dt>Antwort des Servers</dt><dd class="mat-mono ms-break">@m.RemoteResponse</dd>
+                }
+                @if (m.MessageIdHeader is not null)
+                {
+                    <dt>Message-ID</dt><dd class="mat-mono ms-break">@m.MessageIdHeader</dd>
+                }
+            </dl>
+        </ms-card>
+
+        <ms-card title="Verlauf" icon="history">
+            <ul class="ms-notes">
+                @* The line of the receipt names the client and its relay user: not for the outside. *@
+                @foreach (var e in m.Events.Where(e => !e.Text.StartsWith("Empfangen von", StringComparison.Ordinal)).OrderBy(e => e.OccurredDate).ThenBy(e => e.Id))
+                {
+                    <li class="ms-note">
+                        @Ui.Icon(Labels.Icon(e.Level), "ms-note__icon ms-note__icon--" + Labels.Tone(e.Level))
+                        <div class="ms-note__body">
+                            <span class="ms-break">@e.Text</span>
+                            <span class="ms-note__meta">@Fmt.Moment(e.OccurredDate)</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+        </ms-card>
+    }
+</div>

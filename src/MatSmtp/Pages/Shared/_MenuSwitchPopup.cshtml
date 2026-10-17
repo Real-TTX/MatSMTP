@@ -1,0 +1,21 @@
+@model (ShellModel Shell, string? Active)
+@*
+    The popup of the menu switcher: one entry per menu, the current one checked. It is drawn at the end of the page, outside the menu, like the user menu.
+*@
+@{
+    var shell = Model.Shell;
+    var current = shell.CurrentMenu(Model.Active);
+}
+@if (shell.HasSwitcher)
+{
+    <div class="mat-menu" id="nav-switch-menu" role="menu" aria-label="Menüs" data-nav-scope="mat-nav" hidden>
+        @foreach (var menu in shell.Menus)
+        {
+            <button type="button" class="mat-menu__item" role="menuitemradio" aria-checked="@(menu == current ? "true" : "false")" data-nav-set="@menu.Id" data-nav-title="@menu.Title" @Html.Raw(menu.NeedsAttention ? "data-nav-attention" : string.Empty)>
+                @Ui.Icon(menu.Icon)<span>@menu.Title</span>
+                @if (menu.NeedsAttention) { <span class="mat-nav__badge mat-nav__badge--dot mat-nav__badge--warn"><span class="mat-sr-only">braucht Aufmerksamkeit</span></span> }
+                @Ui.Icon("check", "mat-menu__check")
+            </button>
+        }
+    </div>
+}

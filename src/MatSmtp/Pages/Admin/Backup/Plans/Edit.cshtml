@@ -1,0 +1,71 @@
+@page
+@model MatSmtp.Pages.Admin.Backup.Plans.EditModel
+@{
+    var scopes = Controls.Options.Of<BackupScope>(MatSmtp.Pages.Admin.Backup.Plans.IndexModel.Of);
+    var schedules = new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
+    {
+        new("Täglich", nameof(ScheduleKind.Daily)), new("Wöchentlich", nameof(ScheduleKind.Weekly)), new("Monatlich", nameof(ScheduleKind.Monthly)), new("Alle paar Stunden", nameof(ScheduleKind.Hourly)),
+    };
+    var days = Enum.GetValues<DayOfWeek>().Select(d => new Microsoft.AspNetCore.Mvc.Rendering.SelectListItem(MatSmtp.Services.Backup.BackupSchedule.DayName(d), d.ToString())).ToList();
+}
+
+<form class="mat-form" method="post" novalidate>
+    <input type="hidden" name="Id" value="@Model.Id" />
+    <ms-summary />
+
+    @if (Model.Targets.Count == 0)
+    {
+        <div class="mat-alert mat-alert--warning">@Ui.Icon("alert")<div class="mat-alert__body">Es gibt noch kein Ziel. <a href="/Admin/Backup/Targets/Edit">Lege zuerst ein Ziel an</a>, zum Beispiel dein NAS.</div></div>
+    }
+
+    <ms-card title="Was und wohin" icon="hard-drive">
+        <div class="mat-form__grid">
+            <ms-input for="Input.Name" label="Name" required="true" full="true" hint="Zum Beispiel „Nachts aufs NAS“." />
+            <ms-select for="Input.TargetId" label="Ziel" items="Model.Targets" empty="(bitte wählen)" />
+            <ms-select for="Input.Scope" label="Umfang" items="scopes" hint="„System“ sind die Datenbank (Regeln, Konten, Nachrichten, Benutzer), die Einstellungen, die Schlüssel und die Zertifikate. „System und Nachrichteninhalte“ nimmt auch die .eml-Dateien der Warteschlange mit." />
+            <ms-switch for="Input.IsEnabled" label="Der Plan läuft von selbst" full="true" />
+        </div>
+    </ms-card>
+
+    <ms-card title="Wann" icon="calendar">
+        <div class="mat-form__grid">
+            <ms-select for="Input.Schedule" label="Wie oft" items="schedules" />
+            <ms-input for="Input.IntervalHours" label="Alle … Stunden" type="number" min="1" max="168" show-if="Input.Schedule" show-value="Hourly" />
+            <ms-input for="Input.TimeOfDay" label="Uhrzeit" type="time" show-if="Input.Schedule" show-value="Daily,Weekly,Monthly" hint="Die Uhrzeit dieser Installation (Zeitzone Europe/Berlin, wenn nichts anderes eingestellt ist)." />
+            <ms-select for="Input.DayOfWeek" label="Wochentag" items="days" show-if="Input.Schedule" show-value="Weekly" />
+            <ms-input for="Input.DayOfMonth" label="Tag im Monat" type="number" min="1" max="31" show-if="Input.Schedule" show-value="Monthly" hint="Hat ein Monat weniger Tage, läuft der Plan am letzten Tag." />
+        </div>
+    </ms-card>
+
+    <ms-card title="Wie lange aufheben" icon="clock">
+        <p class="mat-muted">Die Regeln zählen zusammen. Ältere Sicherungen dieses Plans, die keine Regel mehr festhält, werden nach einer neuen Sicherung gelöscht. Sind alle Regeln 0, wird nie etwas gelöscht.</p>
+        <div class="mat-form__grid">
+            <ms-input for="Input.KeepLast" label="Die neuesten" type="number" min="0" hint="Anzahl" />
+            <ms-input for="Input.KeepDaily" label="Eine pro Tag für" type="number" min="0" hint="Tage" />
+            <ms-input for="Input.KeepWeekly" label="Eine pro Woche für" type="number" min="0" hint="Wochen" />
+            <ms-input for="Input.KeepMonthly" label="Eine pro Monat für" type="number" min="0" hint="Monate" />
+        </div>
+    </ms-card>
+
+    <ms-card title="Verschlüsselung" icon="lock">
+        <div class="mat-form__grid">
+            <ms-input for="Input.Passphrase" label="@(Model.Encrypted ? "Neues Passwort" : "Passwort zum Verschlüsseln")" type="password" autocomplete="new-password" full="true" hint="@(Model.Encrypted ? "Leer lassen, um das gespeicherte Passwort zu behalten." : "Leer: Die Sicherung ist nicht verschlüsselt. Sie enthält die Schlüssel zu deinen gespeicherten Passwörtern, verschlüssele sie, wenn das Ziel nicht nur dir gehört.")" />
+            @if (Model.Encrypted)
+            {
+                <ms-switch for="Input.RemovePassphrase" label="Nicht mehr verschlüsseln" full="true" />
+            }
+        </div>
+        <p class="mat-hint">Ohne dieses Passwort lässt sich eine verschlüsselte Sicherung nicht wiederherstellen. Bewahre es getrennt auf.</p>
+    </ms-card>
+
+    @if (Model.Plan is not null)
+    {
+        <ms-buttons back-href="/Admin/Backup/Plans" delete-url="@Url.Page("/Admin/Backup/Plans/Edit", "Delete", new { id = Model.Id })" delete-confirm="Diesen Plan löschen? Die Sicherungen am Ziel bleiben liegen.">
+            <button type="submit" formnovalidate asp-page-handler="Run" asp-route-id="@Model.Id" class="mat-btn mat-btn--secondary" data-confirm="Diesen Plan jetzt ausführen?" data-confirm-ok="Jetzt sichern">@Ui.Icon("play")<span>Jetzt ausführen</span></button>
+        </ms-buttons>
+    }
+    else
+    {
+        <ms-buttons back-href="/Admin/Backup/Plans" />
+    }
+</form>

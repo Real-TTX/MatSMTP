@@ -1,0 +1,55 @@
+@page
+@model MatSmtp.Pages.Admin.Users.EditModel
+@{
+    var roles = Controls.Options.Of<UserRole>(Labels.Of);
+}
+
+<form class="mat-form" method="post" novalidate>
+    <input type="hidden" name="Id" value="@Model.Id" />
+    <ms-summary />
+    <ms-card title="Konto" icon="user" sub="@(Model.IsMe ? "das bist du" : null)">
+        <div class="mat-form__grid">
+            <ms-input for="Input.DisplayName" label="Name" required="true" autocomplete="off" />
+            <ms-input for="Input.Email" label="E-Mail-Adresse (Anmeldename)" type="email" inputmode="email" required="true" autocomplete="off" />
+            <ms-input for="Input.Phone" label="Telefon" type="tel" />
+            <ms-select for="Input.Role" label="Rolle" items="roles" hint="Administratoren richten das Relay ein (Regeln, Konten, Zugänge, Webhooks) und verwalten Benutzer, Backup und Freigaben. Benutzer sehen Übersicht und Nachrichten, senden erneut und legen Freigabe-Links an." />
+            <ms-switch for="Input.IsActive" label="Darf sich anmelden" full="true" />
+            <ms-input for="Input.Password" label="@(Model.Account is null ? "Passwort" : "Neues Passwort")" type="password" autocomplete="new-password" required="@(Model.Account is null)" hint="@(Model.Account is null ? "Mindestens 10 Zeichen." : "Leer lassen, um das Passwort zu behalten. Mit einem neuen Passwort werden alle Sitzungen der Person beendet.")" />
+        </div>
+    </ms-card>
+
+    @if (Model.Account is not null)
+    {
+        <ms-buttons back-href="/Admin/Users" delete-url="@(Model.IsMe ? null : Url.Page("/Admin/Users/Edit", "Delete", new { id = Model.Id }))" delete-confirm="Diesen Benutzer löschen? Er kann sich nicht mehr anmelden, seine Einträge bleiben erhalten." />
+    }
+    else
+    {
+        <ms-buttons back-href="/Admin/Users" />
+    }
+</form>
+
+@if (Model.Account is not null)
+{
+    <ms-card title="Anmeldung" icon="shield">
+        <dl class="mat-kv">
+            <dt>Zwei-Faktor-Anmeldung</dt><dd>@(Model.HasTotp ? "an (Authenticator-App)" : "aus")</dd>
+            <dt>Letzte Anmeldung</dt><dd>@(Model.Account.LastLoginDate is null ? "noch nie" : Fmt.Moment(Model.Account.LastLoginDate))</dd>
+            <dt>Offene Sitzungen</dt><dd>@Model.Sessions</dd>
+            <dt>Falsche Anmeldungen</dt><dd>@Model.Account.FailedLogins@(Model.IsLocked ? $" · gesperrt bis {Fmt.Moment(Model.Account.LockoutEndDate)}" : "")</dd>
+        </dl>
+        <form method="post" class="mat-actions">
+            @if (Model.IsLocked || Model.Account.FailedLogins > 0)
+            {
+                <button type="submit" asp-page-handler="Unlock" asp-route-id="@Model.Id" class="mat-btn mat-btn--secondary">@Ui.Icon("lock-open")<span>Sperre aufheben</span></button>
+            }
+            @if (Model.HasTotp)
+            {
+                <button type="submit" asp-page-handler="ResetTotp" asp-route-id="@Model.Id" class="mat-btn mat-btn--secondary" data-confirm="Die Zwei-Faktor-Anmeldung dieser Person abschalten? Sie kann sie danach neu einrichten." data-confirm-ok="Abschalten">@Ui.Icon("shield")<span>Zwei Faktoren zurücksetzen</span></button>
+            }
+            @if (Model.Sessions > 0)
+            {
+                <button type="submit" asp-page-handler="EndSessions" asp-route-id="@Model.Id" class="mat-btn mat-btn--ghost" data-confirm="Alle Sitzungen dieser Person beenden?" data-confirm-ok="Beenden">@Ui.Icon("logout")<span>Alle Sitzungen beenden</span></button>
+            }
+        </form>
+    </ms-card>
+}

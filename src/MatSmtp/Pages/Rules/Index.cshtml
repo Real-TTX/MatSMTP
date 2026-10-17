@@ -1,0 +1,13 @@
+@page
+@model MatSmtp.Pages.Rules.IndexModel
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="Model.Toolbar" />
+    <partial name="_Table" model="Model.Table" />
+    <partial name="_Pager" model="Model.Pager" />
+    <div class="mat-actions">
+        <a class="mat-btn mat-btn--primary" href="/Rules/Edit">@Ui.Icon("plus")<span>Neue Regel</span></a>
+        <a class="mat-btn mat-btn--secondary" href="/RuleTest">@Ui.Icon("flask")<span>Regeln testen</span></a>
+    </div>
+</div>
+<form id="@MatSmtp.Pages.Rules.IndexModel.MoveForm" method="post" asp-page-handler="Move" hidden></form>

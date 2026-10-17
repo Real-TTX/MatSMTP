@@ -1,0 +1,75 @@
+@using Microsoft.AspNetCore.Html
+@model (ShellModel Shell, string? Active)
+@*
+    The menu of the shell: a panel of items per menu; only the menu that has the current page is shown. Items: an icon and a label, the current one marked; a badge
+    at the right end; a parent opens its children. The switcher between the menus (only with more than one) is at the foot, above the user: _Layout draws it.
+*@
+@{
+    var shell = Model.Shell;
+    var active = Model.Active;
+    var current = shell.CurrentMenu(active);
+
+    IHtmlContent Badge(NavBadge badge, bool sum = false)
+    {
+        var text = badge.IsDot ? string.Empty : badge.Text;
+        var label = string.IsNullOrEmpty(badge.Label) ? string.Empty : (badge.IsDot ? badge.Label : " " + badge.Label);
+        return new HtmlString($"<span class=\"{badge.Classes(sum)}\">{System.Net.WebUtility.HtmlEncode(text)}" + (label.Length == 0 ? string.Empty : $"<span class=\"mat-sr-only\">{System.Net.WebUtility.HtmlEncode(label)}</span>") + "</span>");
+    }
+}
+
+@foreach (var menu in shell.Menus)
+{
+    <nav class="mat-nav__scroll" aria-label="@(shell.HasSwitcher ? menu.Title : "Hauptmenü")" data-nav-panel="@menu.Id" hidden="@(menu != current)">
+        <ul class="mat-nav__list">
+            @foreach (var group in menu.Groups)
+            {
+                if (group.Title is not null)
+                {
+                    <li class="mat-nav__group" role="presentation">@group.Title</li>
+                }
+
+                foreach (var item in group.Items)
+                {
+                    if (item.IsParent)
+                    {
+                        var hasActive = item.Contains(active);
+                        var subId = $"nav-sub-{menu.Id}-{item.Key}";
+                        var sum = item.SumOfChildren;
+                        <li class="mat-nav__branch @(hasActive ? "is-open is-current" : "")">
+                            <button type="button" class="mat-nav__item mat-nav__parent" aria-expanded="@(hasActive ? "true" : "false")" aria-controls="@subId" data-nav-branch="@item.Key">
+                                @if (item.Icon is not null) { @Ui.Icon(item.Icon) }<span>@item.Title</span>
+                                @if (item.Badge is not null) { @Badge(item.Badge) }
+                                else if (sum is not null) { @Badge(sum, sum: true) }
+                                @Ui.Icon("chevron-down", "mat-nav__chev")
+                            </button>
+                            <div class="mat-nav__sub" id="@subId">
+                                <ul class="mat-nav__list">
+                                    @foreach (var child in item.Children!)
+                                    {
+                                        var childActive = child.Href == active;
+                                        <li>
+                                            <a class="mat-nav__item mat-nav__item--sub @(childActive ? "is-active" : "")" href="@child.Href" aria-current="@(childActive ? "page" : null)">
+                                                <span>@child.Title</span>
+                                                @if (child.Badge is not null) { @Badge(child.Badge) }
+                                            </a>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </li>
+                    }
+                    else
+                    {
+                        var isActive = item.Href == active;
+                        <li>
+                            <a class="mat-nav__item @(item.Primary ? "mat-nav__item--primary" : "") @(isActive ? "is-active" : "")" href="@item.Href" aria-current="@(isActive ? "page" : null)">
+                                @if (item.Icon is not null) { @Ui.Icon(item.Icon) }<span>@item.Title</span>
+                                @if (item.Badge is not null) { @Badge(item.Badge) }
+                            </a>
+                        </li>
+                    }
+                }
+            }
+        </ul>
+    </nav>
+}

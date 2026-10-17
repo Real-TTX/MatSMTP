@@ -1,0 +1,11 @@
+{
+  "name": "matsmtp-e2e",
+  "private": true,
+  "description": "Browser checks of MatSmtp against a running stack (Playwright with the installed Edge or Chrome).",
+  "scripts": {
+    "flow": "node flow.js http://localhost:2525"
+  },
+  "dependencies": {
+    "playwright-core": "^1.55.0"
+  }
+}

@@ -1,0 +1,67 @@
+# MatSMTP - development stack: builds the image from the source in this folder.
+#   ./scripts/redeploy.ps1            (rebuilds the container and redeploys the stack)
+#   docker compose -f docker-compose.dev.yml up -d --build
+#
+# Web:        http://localhost:2525
+# SMTP:       localhost:2025 (STARTTLS), localhost:2587 (submission), localhost:2465 (TLS)
+# Database:   http://localhost:2526   (sqlite-web on the SQLite file of the app: the database UI of this stack, like pgAdmin for PostgreSQL)
+# Test mail:  http://localhost:2527   (Mailpit: an SMTP server on localhost:2528 that keeps everything; use it as the host of an SMTP account)
+name: matsmtp-dev
+
+services:
+  matsmtp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        Channel: ${MATSMTP_CHANNEL:-local}
+        BuildNumber: ${MATSMTP_BUILD_NUMBER:-0}
+        BuildDate: ${MATSMTP_BUILD_DATE:-}
+    image: matsmtp:dev
+    restart: unless-stopped
+    ports:
+      - "2525:2525"
+      - "2025:2025"
+      - "2587:2587"
+      - "2465:2465"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      TZ: Europe/Berlin
+    volumes:
+      - matsmtp-data:/data
+
+  # Database UI of the development stack: the SQLite file of the app, read and written as the user of the app (uid 1654), so no file of the volume ends up
+  # belonging to root.
+  sqlite-web:
+    image: coleifer/sqlite-web
+    restart: unless-stopped
+    user: "1654:1654"
+    environment:
+      SQLITE_DATABASE: /matsmtp/db/matsmtp.db
+    ports:
+      - "2526:8080"
+    depends_on:
+      matsmtp:
+        condition: service_healthy
+    volumes:
+      # Beside its own /data: the image would copy its root-owned folder into a fresh volume, and the app could not write it any more.
+      - matsmtp-data:/matsmtp
+
+  # A mail server that keeps everything, to try accounts and rules without sending real mail: SMTP account host "mailpit", port 1025, no encryption.
+  mailpit:
+    image: axllent/mailpit
+    restart: unless-stopped
+    ports:
+      - "2527:8025"
+      - "2528:1025"
+
+# An explicit subnet: on a PC with many stacks Docker runs out of its default address pools ("all predefined address pools
+# have been fully subnetted"). Override with MATSMTP_DEV_SUBNET if this range collides with something.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${MATSMTP_DEV_SUBNET:-10.253.26.0/24}
+
+volumes:
+  matsmtp-data:

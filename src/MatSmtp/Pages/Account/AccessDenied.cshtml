@@ -1,0 +1,18 @@
+@page
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@{
+    Layout = "_Bare";
+    ViewData["Title"] = "Kein Zugriff";
+}
+
+<div class="mat-auth__card">
+    <div class="mat-auth__brand">
+        @Ui.Logo("lg")
+        <h1>Kein Zugriff</h1>
+        <p class="mat-muted">Für diese Seite fehlt dir die Berechtigung.</p>
+    </div>
+    <div class="mat-btn-row mat-btn-row--plain">
+        <a class="mat-btn mat-btn--primary mat-btn--block" href="/">@Ui.Icon("home")<span>Zur Startseite</span></a>
+    </div>
+</div>

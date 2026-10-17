@@ -1,0 +1,42 @@
+@page
+@using Microsoft.AspNetCore.Mvc.Rendering
+@model MatSmtp.Pages.Account.ProfileModel
+@{
+    ViewData["Width"] = "narrow";
+    var themes = new List<SelectListItem> { new("System", "system"), new("Hell", "light"), new("Dunkel", "dark") };
+}
+
+<form class="mat-form" method="post" asp-page-handler="Profile" novalidate>
+    <ms-card title="Profil" icon="user">
+        <ms-summary />
+        <div class="mat-form__grid">
+            <ms-input for="Profile.DisplayName" label="Name" autocomplete="name" />
+            <ms-input for="Profile.Phone" label="Telefon" type="tel" autocomplete="tel" />
+            <div class="mat-field">
+                <span class="mat-label">E-Mail-Adresse</span>
+                <input class="mat-input" value="@Model.Email" disabled />
+                <span class="mat-hint">Die Adresse ändert die Administration.</span>
+            </div>
+            <ms-select for="Profile.Theme" label="Darstellung" items="themes" hint="Der Knopf unten im Menü stellt das Gleiche ein." />
+        </div>
+    </ms-card>
+    <ms-buttons back-href="/" />
+</form>
+
+<form class="mat-form" method="post" asp-page-handler="Password" novalidate>
+    <ms-card title="@(Model.HasPassword ? "Passwort ändern" : "Passwort festlegen")" icon="lock">
+        @if (!Model.HasPassword)
+        {
+            <p class="mat-muted">Du meldest dich bisher mit einem Code per E-Mail an. Mit einem Passwort kannst du dich auch direkt anmelden.</p>
+        }
+        <div class="mat-form__grid">
+            @if (Model.HasPassword)
+            {
+                <ms-input for="Password.Current" label="Aktuelles Passwort" type="password" autocomplete="current-password" full="true" required="true" />
+            }
+            <ms-input for="Password.New" label="Neues Passwort" type="password" autocomplete="new-password" hint="Mindestens 10 Zeichen." />
+            <ms-input for="Password.Repeat" label="Neues Passwort wiederholen" type="password" autocomplete="new-password" />
+        </div>
+    </ms-card>
+    <ms-buttons save-text="Passwort speichern" save-icon="key" back-href="/" />
+</form>

@@ -1,0 +1,25 @@
+# MatSMTP - release stack: one container, one volume (SQLite, queue, settings, keys, certificates).
+#   docker compose up -d
+# Web: http://localhost:2525 (the first visit creates the administrator)
+# SMTP: 25 (STARTTLS), 587 (submission, STARTTLS), 465 (TLS) - point your applications here as their smarthost.
+name: matsmtp
+
+services:
+  matsmtp:
+    image: ghcr.io/real-ttx/matsmtp:latest
+    restart: unless-stopped
+    ports:
+      - "2525:2525"   # web interface (HTTP: put a reverse proxy with TLS in front)
+      - "25:2025"     # SMTP with STARTTLS
+      - "587:2587"    # submission with STARTTLS
+      - "465:2465"    # SMTP over TLS
+    environment:
+      TZ: Europe/Berlin
+      # MATSMTP__Server__PublicUrl: https://smtp.example.de   # for share links
+    volumes:
+      - matsmtp-data:/data
+      # Backups to a NAS go over SMB from the app (Einstellungen > Backup > Ziele); a mounted folder works as well:
+      # - /mnt/nas/matsmtp-backups:/backups
+
+volumes:
+  matsmtp-data:

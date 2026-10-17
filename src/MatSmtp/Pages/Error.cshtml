@@ -1,0 +1,26 @@
+@page
+@using Microsoft.AspNetCore.Authorization
+@attribute [AllowAnonymous]
+@{
+    Layout = "_Bare";
+    var code = int.TryParse(ViewContext.HttpContext.Request.Query["code"], out var parsed) ? parsed : 500;
+    var (title, text) = code switch
+    {
+        404 => ("Das gibt es nicht", "Diese Seite oder dieser Eintrag existiert nicht, oder du darfst ihn nicht sehen."),
+        403 => ("Kein Zugriff", "Für diese Seite fehlt dir die Berechtigung."),
+        400 => ("Die Anfrage stimmt nicht", "Die Anfrage konnte nicht verarbeitet werden. Versuche es bitte noch einmal."),
+        _ => ("Das hat nicht geklappt", "Es ist ein Fehler aufgetreten. Er ist protokolliert. Versuche es bitte noch einmal."),
+    };
+    ViewData["Title"] = title;
+}
+
+<div class="mat-auth__card">
+    <div class="mat-auth__brand">
+        @Ui.Logo("lg")
+        <h1>@title</h1>
+        <p class="mat-muted">@text</p>
+    </div>
+    <div class="mat-btn-row mat-btn-row--plain">
+        <a class="mat-btn mat-btn--primary mat-btn--block" href="/">@Ui.Icon("home")<span>Zur Startseite</span></a>
+    </div>
+</div>

@@ -1,0 +1,20 @@
+@model MatSmtp.Pages.Messages.MessageListModel
+@*
+    The list of messages: toolbar above, the table, the pager directly below, and under it, left-aligned, the actions for the selected rows (the delete button
+    spaced apart). The checks of the rows belong to the form of the actions (form="message-bulk").
+*@
+<div class="mat-list" data-selectable>
+    <partial name="_Toolbar" model="Model.Toolbar" />
+    <partial name="_Table" model="Model.Table" />
+    <partial name="_Pager" model="Model.Pager" />
+    @if (Model.Table.Rows.Count > 0)
+    {
+        <form class="mat-actions" id="@MatSmtp.Pages.Messages.MessageListModel.BulkForm" method="post">
+            <input type="hidden" name="returnUrl" value="@(Context.Request.Path + Context.Request.QueryString)" />
+            <span class="mat-muted ms-bulk-count" aria-live="polite"><strong data-bulk-count>0</strong> ausgewählt</span>
+            <button type="submit" asp-page-handler="Retry" class="mat-btn mat-btn--secondary">@Ui.Icon("refresh")<span>Erneut senden</span></button>
+            <span class="mat-btn-row__spacer"></span>
+            <button type="submit" asp-page-handler="Delete" class="mat-btn mat-btn--danger" data-confirm="Die ausgewählten Nachrichten löschen? Ihr Inhalt und ihr Verlauf sind dann weg; Nachrichten in der Warteschlange werden nicht mehr versendet." data-confirm-ok="Löschen">@Ui.Icon("trash")<span>Löschen</span></button>
+        </form>
+    }
+</div>

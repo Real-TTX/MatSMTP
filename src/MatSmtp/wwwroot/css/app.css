@@ -1,0 +1,114 @@
+/* ==========================================================================
+   MatSMTP: the few styles of the app itself. Everything else is MatUi (wwwroot/ui), which is copied from MatDesign and never changed here.
+   Rules of this file: classes start with ms-; only tokens (--mat-*) for colours, no literal colour except the accent of the app below;
+   flat on purpose (MatDesign "A flat look"): borders instead of shadows, no gradients, nothing lifts on hover; no inline styles anywhere
+   (a value that is data, such as the colour of a document, is set by app.js as a custom property).
+   ========================================================================== */
+
+/* The colour of the app: sun yellow, deep enough to stand out against white. Text on it is dark (7.9 : 1), links and text in the accent use a darker gold (6.1 : 1 on white). */
+[data-app="matsmtp"] { --mat-app-accent: #e8a200; --mat-app-on-accent: #1f1a0a; --mat-app-accent-text: #805c00; }
+
+/* ---- Pages without a menu (sign-in, setup, a shared link) ---- */
+.ms-auth__alt { text-align: center; margin: var(--mat-space-4) 0 0; font-size: var(--mat-fs-sm); }
+.ms-bare { padding-block: var(--mat-space-8); padding-inline: max(var(--mat-content-pad), var(--mat-safe-left)) max(var(--mat-content-pad), var(--mat-safe-right)); }
+
+/* ---- Small helpers ---- */
+.ms-sub { display: block; }
+.ms-name, .mat-table__name.ms-name { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.ms-prewrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ms-person { display: inline-flex; align-items: center; gap: var(--mat-space-2); }
+.ms-money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ms-warn-text { color: var(--mat-danger-text); }
+.mat-page > * + * { margin-top: var(--mat-space-4); }
+.ms-codes { list-style: none; padding: 0; margin: var(--mat-space-4) 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--mat-space-2); }
+.ms-codes li { background: var(--mat-surface-3); padding: var(--mat-space-2) var(--mat-space-3); border-radius: var(--mat-radius); text-align: center; letter-spacing: .05em; }
+.ms-steps { padding-left: var(--mat-space-5); margin: 0 0 var(--mat-space-4); display: grid; gap: var(--mat-space-1); }
+.ms-qr { display: flex; justify-content: center; margin: var(--mat-space-4) 0; }
+.ms-qr svg { width: 200px; height: 200px; background: var(--mat-surface); padding: var(--mat-space-2); border: 1px solid var(--mat-border); border-radius: var(--mat-radius); }
+.ms-cards { display: grid; gap: var(--mat-space-4); }
+.ms-split { display: grid; gap: var(--mat-space-4); align-items: start; }
+@media (min-width: 1100px) { .ms-split { grid-template-columns: minmax(0, 1fr) 22rem; } }
+
+/* ---- The number cards at the top of a page ---- */
+.ms-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr)); gap: var(--mat-space-3); }
+.ms-stat .mat-stat__label { display: inline-flex; align-items: center; gap: var(--mat-space-2); }
+.ms-stat .mat-stat__label .mat-icon { color: var(--mat-text-faint); }
+.ms-stat .mat-stat__value { font-variant-numeric: tabular-nums; }
+a.ms-stat--link { color: inherit; text-decoration: none; }
+a.ms-stat--link:hover { border-color: var(--mat-border-strong); text-decoration: none; }
+
+/* ---- The bell in the header bar ---- */
+.ms-bell { position: relative; }
+.ms-bell__count { position: absolute; top: 2px; right: 0; min-width: 1.15rem; height: 1.15rem; padding: 0 4px; font-size: 11px; line-height: 1.15rem; pointer-events: none; }
+
+/* ---- No connection ---- */
+.ms-offline { margin: 0; border-radius: 0; border-inline: 0; border-top: 0; padding-left: calc(var(--mat-content-pad) + var(--mat-safe-left)); padding-right: calc(var(--mat-content-pad) + var(--mat-safe-right)); }
+.ms-offline[hidden] { display: none; }
+html.is-offline .ms-needs-online { opacity: .55; }
+
+/* ---- Lists of notifications ---- */
+.ms-notes { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.ms-note { display: flex; gap: var(--mat-space-3); align-items: flex-start; padding: var(--mat-space-3) 0; border-bottom: 1px solid var(--mat-border); }
+.ms-note:last-child { border-bottom: 0; }
+.ms-note__icon { flex: none; margin-top: 2px; }
+.ms-note__icon--ok { color: var(--mat-success-text); }
+.ms-note__icon--error { color: var(--mat-danger-text); }
+.ms-note__icon--warn { color: var(--mat-warning-text); }
+.ms-note__icon--info { color: var(--mat-info-text); }
+.ms-note__body { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ms-note__title { font-weight: 600; color: var(--mat-text); text-decoration: none; }
+a.ms-note__title:hover, button.ms-note__title:hover { color: var(--mat-accent-text); }
+button.ms-note__title { display: inline; padding: 0; border: 0; background: none; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+button.ms-note__title:focus-visible { outline: none; box-shadow: var(--mat-focus-ring); border-radius: var(--mat-radius-xs); }
+.ms-note.is-unread .ms-note__title::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: var(--mat-space-2); border-radius: 50%; background: var(--mat-accent); vertical-align: middle; }
+.ms-note__meta { font-size: var(--mat-fs-sm); color: var(--mat-text-muted); }
+
+
+/* ---- Scrollbars: hidden until something scrolls, then thin and in the colours of the app ---- */
+* { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+*:hover, *:focus-within, .is-scrolling { scrollbar-color: var(--mat-border-strong) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: transparent; border-radius: var(--mat-radius-pill); }
+*:hover::-webkit-scrollbar-thumb, .is-scrolling::-webkit-scrollbar-thumb { background: var(--mat-border-strong); }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* ---- A column beside the main content is narrow: label above the value ---- */
+.ms-split > aside .mat-kv { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+.ms-split > aside .mat-kv dd { margin-bottom: var(--mat-space-3); }
+
+/* ---- Text that must not overflow on a phone: message ids, headers, answers of servers ---- */
+.ms-break { overflow-wrap: anywhere; word-break: break-word; }
+.ms-pre { margin: 0; padding: var(--mat-space-3); background: var(--mat-surface-2); border: 1px solid var(--mat-border); border-radius: var(--mat-radius); font-family: var(--mat-mono); font-size: var(--mat-fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; }
+.ms-subhead { font-size: var(--mat-fs-md); font-weight: 600; margin: var(--mat-space-4) 0 var(--mat-space-2); }
+.ms-plainlist { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--mat-space-1); }
+.ms-plainlist .mat-icon { color: var(--mat-text-faint); vertical-align: -3px; }
+.ms-secret { font-size: var(--mat-fs-md); padding: 2px var(--mat-space-2); background: var(--mat-surface); border: 1px solid var(--mat-border); border-radius: var(--mat-radius-sm); }
+.ms-bulk-count { font-size: var(--mat-fs-sm); }
+
+/* ---- Messages per hour on the overview: the height of a bar is data (data-bar, set as --ms-bar by app.js) ---- */
+.ms-bars { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(24, minmax(0, 1fr)); gap: 3px; align-items: end; height: 10rem; }
+.ms-bars__item { display: grid; grid-template-rows: 1fr auto; height: 100%; min-width: 0; }
+.ms-bars__track { display: flex; align-items: flex-end; height: 100%; border-bottom: 1px solid var(--mat-border); }
+.ms-bars__bar { display: flex; flex-direction: column; width: 100%; height: var(--ms-bar, 0%); min-height: 1px; background: var(--mat-accent); border-radius: 2px 2px 0 0; overflow: hidden; }
+/* the share of the hour that failed or was refused, on top of the bar */
+.ms-bars__fail { display: block; height: var(--ms-bar, 0%); background: var(--mat-danger); }
+
+.ms-bars__label { font-size: 10px; color: var(--mat-text-faint); text-align: center; font-variant-numeric: tabular-nums; padding-top: 2px; }
+.ms-bars__item:nth-child(odd) .ms-bars__label { visibility: hidden; }
+@media (min-width: 900px) { .ms-bars__item:nth-child(odd) .ms-bars__label { visibility: visible; } }
+
+/* ---- The order of the rules: two small arrows in a row ---- */
+.ms-move { display: inline-flex; gap: 2px; }
+
+/* ---- Share links on the page of a message ---- */
+.ms-link { display: flex; align-items: center; gap: var(--mat-space-2); padding: var(--mat-space-2) 0; border-bottom: 1px solid var(--mat-border); }
+.ms-link__text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ms-link__tools { display: flex; gap: 2px; }
+.ms-link__tools form { display: contents; }
+.ms-share-form { margin-top: var(--mat-space-3); }
+
+/* ---- The page behind a share link ---- */
+.ms-share { max-width: 52rem; margin: 0 auto; display: grid; gap: var(--mat-space-4); }
+.ms-share__bar { display: flex; align-items: center; justify-content: space-between; gap: var(--mat-space-3); }
+.ms-share__brand { display: flex; align-items: center; gap: var(--mat-space-3); }
+.ms-share__title { margin: 0; font-size: var(--mat-fs-xl); }

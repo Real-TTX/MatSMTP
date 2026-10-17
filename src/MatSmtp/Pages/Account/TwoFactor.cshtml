@@ -1,0 +1,22 @@
+@page
+@model MatSmtp.Pages.Account.TwoFactorModel
+@{
+    Layout = "_Bare";
+}
+
+<div class="mat-auth__card">
+    <div class="mat-auth__brand">
+        @Ui.Logo("lg")
+        <h1>Zweiter Faktor</h1>
+        <p class="mat-muted">Gib den Code deiner Authenticator-App ein.</p>
+    </div>
+
+    <form class="mat-form" method="post" novalidate>
+        <ms-summary title="Das hat nicht geklappt." />
+        <ms-input for="Code" label="Code" type="text" inputmode="numeric" autocomplete="one-time-code" autofocus hint="Sechs Ziffern aus der App. Hast du das Handy nicht dabei, gilt auch ein Wiederherstellungscode." />
+        <div class="mat-btn-row mat-btn-row--plain">
+            <button type="submit" class="mat-btn mat-btn--primary mat-btn--block">@Ui.Icon("shield")<span>Bestätigen</span></button>
+        </div>
+    </form>
+    <p class="ms-auth__alt"><a href="/Account/Login">Abbrechen</a></p>
+</div>

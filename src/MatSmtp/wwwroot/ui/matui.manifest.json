@@ -1,0 +1,99 @@
+{
+  "name": "MatUi",
+  "version": "0.2.0",
+  "build": "local-20261016",
+  "hash": "460d08197d",
+  "changelog": "CHANGELOG.md",
+  "files": [
+    {
+      "name": "matui.css",
+      "url": "matui.css",
+      "bytes": 281809,
+      "sha256": "73be85558f5c51748c0f2e1dc385c540d43f29c1e2b9775fcd4dc6c299bc93fe"
+    },
+    {
+      "name": "matui.js",
+      "url": "matui.js",
+      "bytes": 422195,
+      "sha256": "12f196398856ce0b602d0b182129d046dbbebc68cabe27e5776ce20b6272f9f3"
+    },
+    {
+      "name": "matui.boot.js",
+      "url": "matui.boot.js",
+      "bytes": 1098,
+      "sha256": "3fb8790bb8f0d788534d2a9c6f88000b64b252b3ddf043770d2b964299069ef5"
+    },
+    {
+      "name": "matui-icons.svg",
+      "url": "matui-icons.svg",
+      "bytes": 21300,
+      "sha256": "6df3f19c8e3d24deef0c4faf86bc1b30f729d4d49892d94c14523b8de58c952e"
+    },
+    {
+      "name": "css/matui.tokens.css",
+      "url": "css/matui.tokens.css",
+      "bytes": 20111,
+      "sha256": "3fd3aaa3db70d1681f98a5cb3f4aa594b86bb5b33f932e38c390e8c0cc5b31c7"
+    },
+    {
+      "name": "css/matui.base.css",
+      "url": "css/matui.base.css",
+      "bytes": 5350,
+      "sha256": "7d0c226a7fad4eae48da17a25db54579fe252340662d85845102e316075eec19"
+    },
+    {
+      "name": "css/matui.shell.css",
+      "url": "css/matui.shell.css",
+      "bytes": 28245,
+      "sha256": "d814a746d9425137b4b3685cafeb9e61cb1f8f975ebfbe63ad96276989ce6741"
+    },
+    {
+      "name": "css/matui.controls.css",
+      "url": "css/matui.controls.css",
+      "bytes": 35944,
+      "sha256": "ea3f9ff3775020de320c2f10acf6c6a3be644c683455af37945ddcb103bbddd2"
+    },
+    {
+      "name": "css/matui.forms.css",
+      "url": "css/matui.forms.css",
+      "bytes": 56225,
+      "sha256": "85289847cb0b0946c6834d8509d58278e33b635c6143f2cd1257e3782d435998"
+    },
+    {
+      "name": "css/matui.pickers.css",
+      "url": "css/matui.pickers.css",
+      "bytes": 30560,
+      "sha256": "383c5e545fb5fd60f6d40e55d407f0edf9685390bbcd22cedc68c04c4a4e89d4"
+    },
+    {
+      "name": "css/matui.lists.css",
+      "url": "css/matui.lists.css",
+      "bytes": 73791,
+      "sha256": "38e44208790ebc34b950861ab8718ca611136db4041b7f4e92ffa33d30d4d683"
+    },
+    {
+      "name": "css/matui.dialogs.css",
+      "url": "css/matui.dialogs.css",
+      "bytes": 6217,
+      "sha256": "4805b733236ca30c377e219d1fcdb729626f7e1754bcfc5f2f68bf06e2aeaf39"
+    },
+    {
+      "name": "css/matui.layout.css",
+      "url": "css/matui.layout.css",
+      "bytes": 21295,
+      "sha256": "30eed6f4f93a57da16bb19184e6f296d3bcfa57c9653562f0f110afbd0d4b83f"
+    },
+    {
+      "name": "css/matui.apps.css",
+      "url": "css/matui.apps.css",
+      "bytes": 3817,
+      "sha256": "e0dfdf432cf5a631b5e082061e1a9fb7871e585963c22a446e26bb28eb5fd3f4"
+    },
+    {
+      "name": "CHANGELOG.md",
+      "url": "CHANGELOG.md",
+      "bytes": 22963,
+      "sha256": "5016fd18fca83d59a82b21e9f1bed23ec37db8f105bc98d1404f15f689de76ab"
+    }
+  ]
+}

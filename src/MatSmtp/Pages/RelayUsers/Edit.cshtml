@@ -1,0 +1,48 @@
+@page
+@model MatSmtp.Pages.RelayUsers.EditModel
+
+@if (Model.Generated is not null)
+{
+    <div class="mat-alert mat-alert--success" role="status">
+        @Ui.Icon("key")
+        <div class="mat-alert__body">
+            <strong>Das neue Passwort:</strong>
+            <span class="mat-mono ms-secret" id="generated-password">@Model.Generated</span>
+            <span>Trage es jetzt in der Anwendung ein. Es wird nur dieses eine Mal angezeigt.</span>
+        </div>
+        <div class="mat-alert__actions"><button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-copy="#generated-password">@Ui.Icon("copy")<span>Kopieren</span></button></div>
+    </div>
+}
+
+<form class="mat-form" method="post" asp-page-handler="" novalidate>
+    <input type="hidden" name="Id" value="@Model.Id" />
+    <ms-summary />
+    <ms-card title="Zugang" icon="key">
+        <div class="mat-form__grid">
+            <ms-input for="Input.UserName" label="Benutzername" required="true" autocomplete="off" hint="So meldet sich die Anwendung an (SMTP AUTH PLAIN oder LOGIN)." />
+            <ms-input for="Input.Description" label="Beschreibung (optional)" hint="Welche Anwendung ihn benutzt." />
+            <ms-input for="Input.Password" label="@(Model.Item is null ? "Passwort" : "Neues Passwort")" type="password" autocomplete="new-password" hint="@(Model.Item is null ? "Mindestens 12 Zeichen, oder lass eines erzeugen." : "Leer lassen, um das Passwort zu behalten.")" />
+            <ms-switch for="Input.IsEnabled" label="Darf sich anmelden" />
+            <ms-textarea for="Input.AllowedSenders" label="Erlaubte Absender (optional)" rows="3" full="true" hint="Leer: jeder Absender. Sonst ein Muster pro Zeile, zum Beispiel firma.de, *@@shop.firma.de oder rechnung@@firma.de. Mit einem anderen Absender wird die Nachricht abgewiesen." />
+        </div>
+    </ms-card>
+
+    @if (Model.Item is not null)
+    {
+        <ms-card title="Nutzung" icon="activity">
+            <dl class="mat-kv">
+                <dt>Zuletzt angemeldet</dt><dd>@(Model.Item.LastUsedDate is null ? "noch nie" : Fmt.Moment(Model.Item.LastUsedDate))</dd>
+                <dt>Regeln mit diesem Zugang</dt><dd>@Model.RuleCount</dd>
+            </dl>
+        </ms-card>
+        <ms-buttons back-href="/RelayUsers" delete-url="@Url.Page("/RelayUsers/Edit", "Delete", new { id = Model.Id })" delete-confirm="@(Model.RuleCount > 0 ? $"Diesen Zugang löschen? {Model.RuleCount} Regel(n) gelten nur für ihn; sie passen danach auf keine Nachricht mehr." : "Diesen Zugang löschen? Anwendungen, die ihn benutzen, können nicht mehr senden.")">
+            <button type="submit" formnovalidate asp-page-handler="" asp-route-generate="true" class="mat-btn mat-btn--secondary" data-confirm="Ein neues Passwort erzeugen? Das alte gilt danach nicht mehr." data-confirm-ok="Erzeugen">@Ui.Icon("refresh")<span>Neues Passwort erzeugen</span></button>
+        </ms-buttons>
+    }
+    else
+    {
+        <ms-buttons back-href="/RelayUsers">
+            <button type="submit" asp-page-handler="" asp-route-generate="true" class="mat-btn mat-btn--secondary">@Ui.Icon("key")<span>Mit erzeugtem Passwort speichern</span></button>
+        </ms-buttons>
+    }
+</form>

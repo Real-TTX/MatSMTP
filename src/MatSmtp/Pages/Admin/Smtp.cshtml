@@ -1,0 +1,106 @@
+@page
+@model MatSmtp.Pages.Admin.SmtpModel
+@{
+    var l = Model.Listener;
+    var formats = new List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>
+    {
+        new("PKCS#12 (.pfx, .p12) mit Passwort", "pfx"),
+        new("PEM (Zertifikat und Schlüssel getrennt)", "pem"),
+    };
+}
+
+<div class="mat-alert mat-alert--@(l.Running ? "success" : "danger")" role="status">
+    @Ui.Icon(l.Running ? "check-circle" : "x-circle")
+    <div class="mat-alert__body">
+        @if (l.Running)
+        {
+            <strong>Der Empfang läuft</strong> <span>auf @string.Join(", ", l.Endpoints), seit @Fmt.Moment(l.Since).</span>
+        }
+        else
+        {
+            <strong>Der Empfang läuft nicht.</strong> <span>@l.Error</span>
+        }
+    </div>
+    <div class="mat-alert__actions">
+        <form method="post" asp-page-handler="Restart"><button type="submit" class="mat-btn mat-btn--secondary mat-btn--sm">@Ui.Icon("refresh")<span>Neu starten</span></button></form>
+    </div>
+</div>
+
+<form class="mat-form" method="post" asp-page-handler="" novalidate>
+    <ms-summary />
+    <ms-card title="Server" icon="inbox">
+        <div class="mat-form__grid">
+            <ms-switch for="Input.Enabled" label="Mails annehmen" full="true" hint="Abgeschaltet nimmt MatSMTP keine Verbindungen an; die Warteschlange wird weiter versendet." />
+            <ms-input for="Input.Hostname" label="Servername" required="true" hint="Steht im Gruß des Servers, in der Received-Kopfzeile und im selbst signierten Zertifikat." />
+            <ms-input for="Input.MaxMessageSizeMb" label="Größte Nachricht (MB)" type="number" />
+            <ms-input for="Input.Port" label="Port SMTP (mit STARTTLS)" type="number" disabled="@Model.PortFixed("Port")" hint="@(Model.PortFixed("Port") ? "Durch die Umgebung festgelegt (MATSMTP__Smtp__Port)." : "0 = aus. Im Container 2025, außen meist 25.")" />
+            <ms-input for="Input.SubmissionPort" label="Port Submission (mit STARTTLS)" type="number" disabled="@Model.PortFixed("SubmissionPort")" hint="@(Model.PortFixed("SubmissionPort") ? "Durch die Umgebung festgelegt." : "0 = aus. Im Container 2587, außen meist 587.")" />
+            <ms-input for="Input.TlsPort" label="Port TLS (SMTPS)" type="number" disabled="@Model.PortFixed("TlsPort")" hint="@(Model.PortFixed("TlsPort") ? "Durch die Umgebung festgelegt." : "0 = aus. Im Container 2465, außen meist 465.")" />
+        </div>
+    </ms-card>
+
+    <ms-card title="Wer senden darf" icon="shield">
+        <div class="mat-form__grid">
+            <ms-switch for="Input.RequireAuth" label="Anmeldung immer verlangen" full="true" hint="Dann muss jede Anwendung sich mit einem Zugang anmelden, auch aus dem eigenen Netz." />
+            <ms-textarea for="Input.TrustedNetworks" label="Vertrauenswürdige Netze (ohne Anmeldung)" rows="4" full="true" show-if="Input.RequireAuth" show-value="false" hint="Ein Netz pro Zeile, zum Beispiel 192.168.0.0/16. Clients daraus senden ohne Anmeldung. Leer: niemand. Vorsicht mit 0.0.0.0/0: das wäre ein offenes Relay." />
+            <ms-switch for="Input.AllowPlainAuth" label="Anmeldung auch ohne TLS erlauben" full="true" hint="Das Passwort geht dann im Klartext über das Netz: nur in einem Netz, dem du vertraust." />
+        </div>
+    </ms-card>
+
+    <ms-buttons />
+</form>
+
+<ms-card title="TLS-Zertifikat" icon="lock">
+    @if (Model.Certificate is { } c)
+    {
+        <dl class="mat-kv">
+            <dt>Ausgestellt für</dt><dd>@c.Subject</dd>
+            <dt>Aussteller</dt><dd>@(c.SelfSigned ? "selbst signiert" : c.Issuer)</dd>
+            <dt>Gültig</dt><dd>@Fmt.Date(c.NotBefore) bis @Fmt.Date(c.NotAfter)</dd>
+            <dt>Fingerabdruck</dt><dd class="mat-mono ms-break">@c.Thumbprint</dd>
+            <dt>Herkunft</dt><dd>@(c.Uploaded ? "hochgeladen" : "von MatSMTP erzeugt")</dd>
+        </dl>
+    }
+    else
+    {
+        <p class="ms-warn-text">Das Zertifikat konnte nicht geladen werden: @Model.CertificateError</p>
+    }
+    <p class="mat-muted">STARTTLS und der TLS-Port verwenden dieses Zertifikat. Ein selbst signiertes verschlüsselt genauso, nur prüfen viele Anwendungen es nicht oder müssen ihm ausdrücklich vertrauen. Mit einem Zertifikat einer Zertifizierungsstelle (etwa Let's Encrypt) für den Servernamen gibt es keine Warnungen.</p>
+
+    <form class="mat-form" method="post" asp-page-handler="Certificate" enctype="multipart/form-data" novalidate>
+        <div class="mat-form__grid">
+            <ms-select for="CertFormat" label="Format" items="formats" full="true" />
+            <div class="mat-field">
+                <label class="mat-label" for="certFile">Zertifikat</label>
+                <input class="mat-input" type="file" id="certFile" name="certFile" accept=".pfx,.p12,.pem,.crt,.cer" />
+                <span class="mat-hint">Bei PEM gern die vollständige Kette (Zertifikat und Zwischenzertifikate).</span>
+            </div>
+            <ms-input for="CertPassword" label="Passwort der PFX-Datei" type="password" autocomplete="off" show-if="CertFormat" show-value="pfx" />
+            <div class="mat-field" data-show-if="CertFormat" data-show-value="pem">
+                <label class="mat-label" for="keyFile">Privater Schlüssel</label>
+                <input class="mat-input" type="file" id="keyFile" name="keyFile" accept=".pem,.key" />
+                <span class="mat-hint">Unverschlüsselter Schlüssel im PEM-Format (RSA oder EC).</span>
+            </div>
+        </div>
+        <div class="mat-actions">
+            <button type="submit" class="mat-btn mat-btn--secondary">@Ui.Icon("upload")<span>Zertifikat hochladen</span></button>
+            @if (Model.Certificate is { Uploaded: false })
+            {
+                <button type="submit" formnovalidate asp-page-handler="Renew" class="mat-btn mat-btn--ghost" data-confirm="Ein neues selbst signiertes Zertifikat erzeugen? Anwendungen, die dem alten ausdrücklich vertrauen, müssen das neue übernehmen." data-confirm-ok="Erzeugen">@Ui.Icon("refresh")<span>Neu erzeugen</span></button>
+            }
+            @if (Model.Certificate is { Uploaded: true })
+            {
+                <span class="mat-btn-row__spacer"></span>
+                <button type="submit" formnovalidate asp-page-handler="RemoveCertificate" class="mat-btn mat-btn--danger" data-confirm="Das hochgeladene Zertifikat entfernen? Der Empfang verwendet dann wieder das selbst signierte." data-confirm-ok="Entfernen">@Ui.Icon("trash")<span>Entfernen</span></button>
+            }
+        </div>
+    </form>
+</ms-card>
+
+<ms-card title="So richtest du eine Anwendung ein" icon="help-circle">
+    <dl class="mat-kv">
+        <dt>SMTP-Server</dt><dd>Adresse des Docker-Hosts (oder <span class="mat-mono">@Model.Input.Hostname</span>, wenn der Name auf ihn zeigt)</dd>
+        <dt>Port</dt><dd>25 oder 587 mit STARTTLS, 465 mit TLS (so in der docker-compose.yml nach außen gegeben; im Container @Model.Input.Port, @Model.Input.SubmissionPort und @Model.Input.TlsPort)</dd>
+        <dt>Anmeldung</dt><dd>@(Model.Input.RequireAuth ? "immer mit einem Zugang" : "aus vertrauenswürdigen Netzen ohne, sonst mit einem Zugang") (<a href="/RelayUsers">Zugänge</a>)</dd>
+    </dl>
+</ms-card>

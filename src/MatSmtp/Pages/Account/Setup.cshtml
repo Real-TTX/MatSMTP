@@ -1,0 +1,24 @@
+@page
+@model MatSmtp.Pages.Account.SetupModel
+@{
+    Layout = "_Bare";
+}
+
+<div class="mat-auth__card">
+    <div class="mat-auth__brand">
+        @Ui.Logo("lg")
+        <h1>Willkommen bei MatSMTP</h1>
+        <p class="mat-muted">Lege das Konto der Administration an. Danach richtest du Firma, E-Mail und Speicher ein.</p>
+    </div>
+
+    <form class="mat-form" method="post" novalidate>
+        <ms-summary title="Bitte prüfe die Angaben." />
+        <ms-input for="Input.DisplayName" label="Dein Name" autocomplete="name" autofocus />
+        <ms-input for="Input.Email" label="E-Mail-Adresse" type="email" autocomplete="username" inputmode="email" hint="Damit meldest du dich an." />
+        <ms-input for="Input.Password" label="Passwort" type="password" autocomplete="new-password" hint="Mindestens 10 Zeichen." />
+        <ms-input for="Input.PasswordRepeat" label="Passwort wiederholen" type="password" autocomplete="new-password" />
+        <div class="mat-btn-row mat-btn-row--plain">
+            <button type="submit" class="mat-btn mat-btn--primary mat-btn--block">@Ui.Icon("check")<span>Konto anlegen</span></button>
+        </div>
+    </form>
+</div>

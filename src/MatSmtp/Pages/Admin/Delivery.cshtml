@@ -1,0 +1,29 @@
+@page
+@model MatSmtp.Pages.Admin.DeliveryModel
+
+<form class="mat-form" method="post" novalidate>
+    <ms-summary />
+    <ms-card title="Versand" icon="send">
+        <div class="mat-form__grid">
+            <ms-switch for="Input.Paused" label="Versand pausieren" full="true" hint="Nachrichten werden weiter angenommen und warten in der Warteschlange, bis du den Versand fortsetzt. Webhooks laufen weiter." />
+            <ms-input for="Input.Parallel" label="Gleichzeitig senden" type="number" hint="So viele Nachrichten gehen zur selben Zeit hinaus." />
+            <ms-switch for="Input.AddReceivedHeader" label="Received-Kopfzeile ergänzen" hint="Vermerkt MatSMTP im Weg der Nachricht (Client-Adresse, Servername)." />
+        </div>
+    </ms-card>
+
+    <ms-card title="Wiederholen" icon="refresh">
+        <div class="mat-form__grid">
+            <ms-input for="Input.MaxAttempts" label="Versuche" type="number" hint="Danach gilt eine Nachricht als fehlgeschlagen. Eine dauerhafte Ablehnung (5xx) beendet die Versuche sofort." />
+            <ms-input for="Input.RetryMinutes" label="Wartezeiten (Minuten)" hint="Nach dem 1., 2., 3. ... Fehlversuch; die letzte gilt für alle weiteren. Beispiel: 1, 5, 15, 60" />
+        </div>
+    </ms-card>
+
+    <ms-card title="Aufbewahren" icon="archive">
+        <div class="mat-form__grid">
+            <ms-input for="Input.KeepDays" label="Nachrichten (Tage)" type="number" hint="So lange bleiben abgeschlossene Nachrichten mit ihrem Verlauf in der Liste." />
+            <ms-input for="Input.KeepBodyDays" label="Inhalt zugestellter Nachrichten (Tage)" type="number" hint="0 = sofort nach der Zustellung löschen. Fehlgeschlagene behalten ihren Inhalt, damit sie erneut gesendet werden können." />
+        </div>
+    </ms-card>
+
+    <ms-buttons />
+</form>

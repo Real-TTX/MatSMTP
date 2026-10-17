@@ -1,0 +1,59 @@
+@page
+@model MatSmtp.Pages.Admin.SystemModel
+
+<div class="ms-stats">
+    @Ui.Kpi("Version", Model.Version, "seit " + Fmt.Moment(Model.Started) + " in Betrieb", "server")
+    @Ui.Kpi("Datenbank", Fmt.FileSize(Model.DatabaseBytes), Model.DatabaseVersion, "database")
+    @Ui.Kpi("Warteschlange", Fmt.FileSize(Model.SpoolBytes), Ui.CountNoun(Model.SpoolFiles, "Nachrichten") + " mit Inhalt", "archive")
+    @Ui.Kpi("Arbeitsspeicher", Fmt.FileSize(Model.Memory), "der Anwendung", "activity")
+</div>
+
+<div class="mat-grid mat-grid--2">
+    <ms-card title="Anwendung" icon="server">
+        <dl class="mat-kv">
+            <dt>Laufzeit</dt><dd>@Model.Runtime</dd>
+            <dt>System</dt><dd>@Model.Os (@Model.Architecture)</dd>
+            <dt>Zeitzone</dt><dd>@Model.TimeZone</dd>
+            <dt>Datenordner</dt><dd class="mat-mono">@Model.DataDir</dd>
+            <dt>Datenbank</dt><dd class="mat-mono">@Model.DatabasePath</dd>
+            <dt>Sicherung</dt><dd>@(Model.BackupBusy ? "läuft gerade" : "bereit") · <a href="/Admin/Backup">öffnen</a></dd>
+        </dl>
+    </ms-card>
+
+    <ms-card title="Inhalt" icon="database">
+        <dl class="mat-kv">
+            @foreach (var (name, count) in Model.Counts)
+            {
+                <dt>@name</dt><dd>@Fmt.Integer(count)</dd>
+            }
+        </dl>
+    </ms-card>
+</div>
+
+<ms-card title="Datenordner" icon="folder">
+    <div class="mat-table-wrap">
+        <table class="mat-table" id="data-folders">
+            <caption class="mat-sr-only">Belegung des Datenordners</caption>
+            <thead><tr><th scope="col">Ordner</th><th scope="col" class="mat-hide-sm">Wofür</th><th scope="col" class="mat-num">Dateien</th><th scope="col" class="mat-num">Größe</th></tr></thead>
+            <tbody>
+                @foreach (var f in Model.Folders)
+                {
+                    <tr>
+                        <td data-label="Ordner">@f.Name</td>
+                        <td data-label="Wofür" class="mat-hide-sm">@f.Hint</td>
+                        <td data-label="Dateien" class="mat-num">@Fmt.Integer(f.Files)</td>
+                        <td data-label="Größe" class="mat-num">@Fmt.FileSize(f.Bytes)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</ms-card>
+
+<ms-card title="Aufräumen" icon="broom">
+    <p class="mat-muted">Jede Stunde entfernt MatSMTP den Inhalt zugestellter Nachrichten und alte Nachrichten nach den Tagen unter <a href="/Admin/Delivery">Zustellung</a>, dazu beendete Sitzungen, abgelaufene Freigabe-Links und Protokolle, die älter als ein Jahr sind. Du kannst das auch jetzt tun. „Datenbank verdichten“ gibt danach den frei gewordenen Platz der Datenbankdatei zurück.</p>
+    <form method="post" class="mat-actions">
+        <button type="submit" asp-page-handler="Maintain" class="mat-btn mat-btn--secondary">@Ui.Icon("broom")<span>Jetzt aufräumen</span></button>
+        <button type="submit" asp-page-handler="Vacuum" class="mat-btn mat-btn--secondary" data-confirm="Die Datenbank verdichten? Bei einer großen Datenbank dauert das einen Moment, Empfang und Versand warten so lange." data-confirm-ok="Verdichten">@Ui.Icon("database")<span>Datenbank verdichten</span></button>
+    </form>
+</ms-card>

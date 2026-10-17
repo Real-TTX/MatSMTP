@@ -1,0 +1,30 @@
+@inject IconSprite Sprite
+@{
+    // A page without a menu: sign-in, setup, a shared link. A centred card on the plain page background.
+    var shell = ViewData["Shell"] as ShellModel ?? ShellFactory.Bare();
+    var title = ViewData["Title"] as string ?? "MatSMTP";
+}
+<!DOCTYPE html>
+<html lang="de" data-app="matsmtp" data-sw="@(AppVersion.Current)-@(Sprite.Hash)" @(ViewData["ClearKept"] is true ? "data-clear-kept" : "") @Html.Raw(shell.RootAttributes)
+      data-dlg-ok="OK" data-dlg-cancel="Abbrechen" data-dlg-close="Schließen" data-dlg-confirm="Bitte bestätigen" data-dlg-notice="Hinweis" data-dlg-input="Eingabe"
+      data-msg-required="Bitte fülle dieses Feld aus." data-msg-type="Bitte gib einen gültigen Wert ein." data-msg-pattern="Das Format stimmt nicht." data-copied="Kopiert">
+<partial name="_Head" model="(shell, title)" />
+<body>
+    <a class="mat-skip" href="#main">Zum Inhalt springen</a>
+    @Html.Raw(Sprite.Html)
+    <main class="@(ViewData["Wide"] is true ? "mat-container ms-bare" : "mat-auth")" id="main">
+        @RenderBody()
+    </main>
+    @if (TempData["Flash"] is string flash)
+    {
+        <div data-toast="@flash" data-tone="success" hidden></div>
+    }
+    @if (TempData["Error"] is string error)
+    {
+        <div data-toast="@error" data-tone="error" hidden></div>
+    }
+    <script src="~/ui/matui.js?v=@Sprite.Hash"></script>
+    <script src="~/js/app.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

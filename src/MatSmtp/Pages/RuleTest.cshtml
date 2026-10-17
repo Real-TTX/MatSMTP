@@ -1,0 +1,61 @@
+@page
+@model MatSmtp.Pages.RuleTestModel
+@using MatSmtp.Core.Relay
+
+<form class="mat-form" method="post" novalidate>
+    <ms-summary />
+    <ms-card title="Nachricht" icon="mail">
+        <div class="mat-form__grid">
+            <ms-input for="Input.From" label="Absender (MAIL FROM)" />
+            <ms-input for="Input.HeaderFrom" label="Von-Kopfzeile (optional)" hint="Leer: wie der Absender." />
+            <ms-textarea for="Input.To" label="Empfänger" rows="2" hint="Einer pro Zeile oder mit Komma getrennt." />
+            <ms-input for="Input.Subject" label="Betreff (optional)" />
+            <ms-input for="Input.ClientIp" label="IP-Adresse des Clients" />
+            <ms-input for="Input.AuthUser" label="Angemeldet als Zugang (optional)" hint="Leer: ohne Anmeldung." />
+        </div>
+    </ms-card>
+    <div class="mat-btn-row">
+        <button type="submit" class="mat-btn mat-btn--primary">@Ui.Icon("flask")<span>Prüfen</span></button>
+        <a class="mat-btn mat-btn--secondary" href="/Rules">@Ui.Icon("route")<span>Zu den Regeln</span></a>
+    </div>
+</form>
+
+@if (Model.Result is { } r)
+{
+    var d = r.Decision;
+    <ms-card title="Ergebnis" icon="check-circle">
+        @if (r.Problem is not null)
+        {
+            <div class="mat-alert mat-alert--warning" role="status">@Ui.Icon("alert")<div class="mat-alert__body">@r.Problem</div></div>
+        }
+        <dl class="mat-kv">
+            <dt>Entscheidung</dt><dd>@Labels.Pill(d.Action)@(d.DecidedBy is null ? " (keine Regel entschied: Vorgabe)" : $" durch „{d.DecidedBy}“")</dd>
+            <dt>Passende Regeln</dt><dd>@(d.Matched.Count == 0 ? "keine" : string.Join(", ", d.Matched))</dd>
+            @if (d.Action == RuleAction.Relay)
+            {
+                <dt>Konto</dt><dd>@(r.AccountName ?? "keines")@(d.AccountId is null ? " (Standardkonto)" : "")</dd>
+            }
+            @if (d.Action == RuleAction.Reject)
+            {
+                <dt>Antwort</dt><dd class="mat-mono">550 5.7.1 @d.RejectMessage</dd>
+            }
+            <dt>Absender danach</dt><dd class="mat-mono">@(d.EnvelopeFrom.Length > 0 ? d.EnvelopeFrom : "<>")@(d.SenderChanged ? "" : " (unverändert)")</dd>
+            @if (d.HeaderFrom is not null || d.HeaderFromName is not null)
+            {
+                <dt>Von-Kopfzeile danach</dt><dd>@(string.IsNullOrEmpty(d.HeaderFromName) ? d.HeaderFrom : $"{d.HeaderFromName} <{d.HeaderFrom}>")</dd>
+            }
+            @if (d.ReplyTo is not null)
+            {
+                <dt>Reply-To</dt><dd class="mat-mono">@d.ReplyTo</dd>
+            }
+            @if (d.Bcc.Count > 0)
+            {
+                <dt>Blindkopie</dt><dd class="mat-mono">@string.Join(", ", d.Bcc)</dd>
+            }
+            @if (r.WebhookNames.Count > 0)
+            {
+                <dt>Webhooks</dt><dd>@string.Join(", ", r.WebhookNames)</dd>
+            }
+        </dl>
+    </ms-card>
+}

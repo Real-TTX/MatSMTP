@@ -1,0 +1,64 @@
+@page
+@model MatSmtp.Pages.Admin.Backup.Restore.ConfirmModel
+
+@if (Model.Result is { } result)
+{
+    <div class="mat-alert mat-alert--success" role="status">@Ui.Icon("check-circle")<div class="mat-alert__body">
+        <strong>Die Sicherung ist wiederhergestellt.</strong> @Ui.Plural(result.Tables, "Tabelle", "Tabellen") mit @Fmt.Integer(result.Rows) Zeilen@(result.Files > 0 ? $" und {Ui.Plural(result.Files, "Nachrichteninhalt", "Nachrichteninhalte")}" : "") sind zurück.
+    </div></div>
+    @if (result.SafetyCopy is not null)
+    {
+        <p class="mat-muted">Der Stand von vorher liegt als Sicherheitskopie im Volume: <span class="mat-mono">@System.IO.Path.GetFileName(result.SafetyCopy)</span></p>
+    }
+    @foreach (var note in result.Notes)
+    {
+        <div class="mat-alert mat-alert--warning">@Ui.Icon("alert")<div class="mat-alert__body">@note</div></div>
+    }
+    <div class="mat-actions">
+        <a class="mat-btn mat-btn--primary" href="/Account/Login">@Ui.Icon("login")<span>Neu anmelden</span></a>
+        <a class="mat-btn mat-btn--secondary" href="/Admin/Backup">@Ui.Icon("back")<span>Zur Übersicht</span></a>
+    </div>
+}
+else if (Model.Manifest is { } m)
+{
+    <form class="mat-form" method="post" novalidate>
+        <input type="hidden" name="file" value="@Model.Staged" />
+        <ms-summary />
+        <ms-card title="Diese Sicherung" icon="shield">
+            <dl class="mat-kv">
+                <dt>Erstellt</dt><dd>@Fmt.Moment(m.CreatedUtc)</dd>
+                <dt>Version</dt><dd>@m.App</dd>
+                <dt>Umfang</dt><dd>@MatSmtp.Pages.Admin.Backup.Plans.IndexModel.Of(m.Scope)</dd>
+                <dt>Datenbank</dt><dd>@Ui.Plural(m.Tables.Count, "Tabelle", "Tabellen"), @Fmt.Integer(m.Tables.Sum(t => t.Rows)) Zeilen</dd>
+                <dt>Nachrichteninhalte</dt><dd>@(m.Files.Count > 0 ? Ui.Plural(m.Files.Count, "Datei", "Dateien") : "keine")@(m.Problems.Count > 0 ? $" ({m.Problems.Count} fehlten schon beim Sichern)" : "")</dd>
+                <dt>Einstellungen und Schlüssel</dt><dd>@(m.HasSettings ? "enthalten" : "nicht enthalten")</dd>
+            </dl>
+        </ms-card>
+
+        <ms-card title="Was zurückgespielt wird" icon="upload">
+            <div class="mat-form__grid">
+                <div class="mat-field mat-field--full"><span class="mat-hint">Die Datenbank (Regeln, Konten, Zugänge, Webhooks, Nachrichten, Benutzer) wird immer ersetzt.</span></div>
+                @if (m.Files.Count > 0)
+                {
+                    <ms-switch for="Input.Files" label="Nachrichteninhalte zurückspielen (.eml der Warteschlange)" full="true" />
+                }
+                @if (m.HasSettings)
+                {
+                    <ms-switch for="Input.Settings" label="Einstellungen und Schlüssel zurückspielen (E-Mail, NAS, Firma; danach ist ein Neustart nötig)" full="true" />
+                }
+            </div>
+        </ms-card>
+
+        <ms-card title="Bestätigen" icon="alert">
+            <p>Alle jetzigen Daten werden durch diese Sicherung ersetzt. Das lässt sich nur über die Sicherheitskopie rückgängig machen, die vorher angelegt wird.</p>
+            <div class="mat-form__grid">
+                <ms-input for="Input.Confirmation" label="@($"Tippe {MatSmtp.Pages.Admin.Backup.Restore.ConfirmModel.Phrase}")" full="true" autocomplete="off" required="true" />
+            </div>
+        </ms-card>
+
+        <div class="mat-btn-row">
+            <button type="submit" class="mat-btn mat-btn--danger" data-confirm="Jetzt alle Daten durch diese Sicherung ersetzen?" data-confirm-ok="Wiederherstellen">@Ui.Icon("upload")<span>Wiederherstellen</span></button>
+            <button type="submit" formnovalidate asp-page-handler="Cancel" class="mat-btn mat-btn--secondary">@Ui.Icon("back")<span>Abbrechen</span></button>
+        </div>
+    </form>
+}
