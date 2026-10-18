@@ -7,6 +7,7 @@ name: matsmtp
 services:
   matsmtp:
     image: ghcr.io/real-ttx/matsmtp:latest
+    container_name: matsmtp
     restart: unless-stopped
     ports:
       - "2525:2525"   # web interface (HTTP: put a reverse proxy with TLS in front)
