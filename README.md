@@ -214,7 +214,7 @@ docker compose -f docker-compose.dev.yml up -d --build    # development stack
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `MATSMTP_PORT` | `2525` | Port of the web interface inside the container |
+| `MATSMTP_WEB_PORT` | `2525` | Port of the web interface inside the container (`MATSMTP_PORT` is the SMTP port an *application* sends to, set by Mattiverse) |
 | `MATSMTP_DATA` | `/data` | Data directory (SQLite, queue, configuration, keys, certificates) |
 | `MATSMTP__Server__PublicUrl` | – | The public address, for share links |
 | `MATSMTP__Server__TimeZone` | `Europe/Berlin` | Time zone for dates and backup schedules |

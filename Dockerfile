@@ -32,7 +32,7 @@ WORKDIR /app
 
 ENV ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_HTTP_PORTS="" \
-    MATSMTP_PORT=2525 \
+    MATSMTP_WEB_PORT=2525 \
     MATSMTP_DATA=/data \
     TZ=Europe/Berlin \
     DOTNET_gcServer=0 \

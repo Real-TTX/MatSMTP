@@ -35,7 +35,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Port 2525; ASPNETCORE_URLS still wins (tests, a reverse proxy on the same machine).
 if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
 {
-    builder.WebHost.UseUrls($"http://+:{Environment.GetEnvironmentVariable("MATSMTP_PORT") ?? "2525"}");
+    builder.WebHost.UseUrls($"http://+:{Environment.GetEnvironmentVariable("MATSMTP_WEB_PORT") ?? "2525"}");
 }
 
 builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 100L * 1024 * 1024);
@@ -293,7 +293,7 @@ public static class HealthCheck
 {
     public static async Task<int> RunAsync()
     {
-        var port = Environment.GetEnvironmentVariable("MATSMTP_PORT") ?? "2525";
+        var port = Environment.GetEnvironmentVariable("MATSMTP_WEB_PORT") ?? "2525";
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
