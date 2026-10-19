@@ -15,6 +15,7 @@ A change that an app can see is written down under **Unreleased** in the pull re
 ### Added
 
 - The colour of a new app, MatIdentity (the single sign-on of the family): `[data-app="matidentity"]` sets `--mat-app-accent: #a21a50` (white text on it passes AA). Nothing to do for the other apps but copy the files.
+- The colour of a new app, MatSMTP (the mail relay of the family): `[data-app="matsmtp"]` sets `--mat-app-accent: #f5b800` (sun yellow), `--mat-app-on-accent: #0b1020` (dark text on it, 10.6:1) and `--mat-app-accent-text: #8a6100` (links, 5.5:1 on white). Nothing to do for the other apps but copy the files.
 
 ### Changed
 

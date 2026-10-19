@@ -58,7 +58,8 @@ A migration: `dotnet ef migrations add <Name> -p src/MatSmtp -s src/MatSmtp -o D
   172.17.0.1). **AUTH without TLS** only on the internal port `Smtp.Port` (2025, not published by Mattiverse) and there only from `Smtp.PlainAuthNetworks`
   (default: private ranges, the Docker network); submission and TLS port always need TLS. EHLO offers AUTH per session (`SmtpListener.CommandFactory`), an AUTH
   that was not offered is answered 538. A relay user's allowed senders are checked for the envelope and the header From.
-- **Colour**: sun yellow `#e8a200` with dark text on it (`--mat-app-on-accent`) and a darker gold for links (`--mat-app-accent-text: #805c00`), set in `app.css`.
+- **Colour**: the registry's sun yellow `#f5b800` with dark text on it (`#0b1020`) and a dark amber for links (`#8a6100`), from the toolkit (`matui.apps.css`); the logo SVGs
+  use the same, the PNGs come from `tools/icons.js`.
   Colour is never the only signal (pills carry words and icons).
 - **Formatting**: invariant request culture; numbers and dates for people with `Fmt` (de-DE).
 - **Razor**: `@` in a German hint must be written `@@`; Razor encodes `ü` as an entity (tests use `AppFixture.TextAsync`).

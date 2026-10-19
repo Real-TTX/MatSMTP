@@ -21,7 +21,8 @@ const jobs = [
   const page = await browser.newPage();
   for (const [source, target, size] of jobs) {
     const svg = fs.readFileSync(path.join(web, source), 'utf8');
-    await page.setViewportSize({ width: size, height: size });
+    // Edge times out on a 32 px window: a larger one, the clip keeps the size.
+    await page.setViewportSize({ width: Math.max(size, 600), height: Math.max(size, 600) });
     await page.setContent(`<html><body style="margin:0;background:transparent">${svg.replace('<svg ', `<svg width="${size}" height="${size}" `)}</body></html>`);
     await page.screenshot({ path: path.join(web, target), omitBackground: true, clip: { x: 0, y: 0, width: size, height: size } });
     console.log('wrote', target);

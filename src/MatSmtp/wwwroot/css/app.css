@@ -5,8 +5,7 @@
    (a value that is data, such as the colour of a document, is set by app.js as a custom property).
    ========================================================================== */
 
-/* The colour of the app: sun yellow, deep enough to stand out against white. Text on it is dark (7.9 : 1), links and text in the accent use a darker gold (6.1 : 1 on white). */
-[data-app="matsmtp"] { --mat-app-accent: #e8a200; --mat-app-on-accent: #1f1a0a; --mat-app-accent-text: #805c00; }
+/* The colour of the app comes from the toolkit (matui.apps.css, MatDesign's registry): sun yellow #f5b800, dark text on it, a dark amber for links. */
 
 /* ---- Pages without a menu (sign-in, setup, a shared link) ---- */
 .ms-auth__alt { text-align: center; margin: var(--mat-space-4) 0 0; font-size: var(--mat-fs-sm); }

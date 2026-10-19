@@ -34,6 +34,7 @@
 [data-app="matgate"]     { --mat-app-accent: #0a7d57; }
 [data-app="matdesign"]   { --mat-app-accent: #d6336c; }
 [data-app="matidentity"] { --mat-app-accent: #a21a50; }
+[data-app="matsmtp"]     { --mat-app-accent: #f5b800; --mat-app-on-accent: #0b1020; --mat-app-accent-text: #8a6100; }
 
 /* ---- A free choice of colour: matui.js (MatUi.accent.custom) writes --mat-custom-accent and --mat-custom-on-accent ---- */
 [data-accent="custom"] { --mat-app-accent: var(--mat-custom-accent, #5b5fe6); --mat-app-on-accent: var(--mat-custom-on-accent, #ffffff); --mat-app-accent-text: initial; }
