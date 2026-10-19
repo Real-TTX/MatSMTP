@@ -26,7 +26,7 @@ by rules which account, which sender and which webhook a message gets.
 
 **Receiving (smarthost)**
 - **SMTP with STARTTLS (25), submission (587) and SMTP over TLS (465)**
-- From **trusted networks** (CIDR list) without signing in, from everywhere else with a **relay user** (SMTP AUTH PLAIN/LOGIN)
+- With a **relay user** (SMTP AUTH PLAIN/LOGIN); without signing in only from **trusted networks** (CIDR list, by default only this machine: no open relay)
 - A relay user can be **limited to its own senders** (`shop.example.com`, `*@billing.example.com`)
 - TLS certificate: **self-signed automatically**, or **uploaded** (PFX or PEM with key)
 - Ten wrong passwords from one address lock that address out for 15 minutes
@@ -183,23 +183,25 @@ volumes:
 Then in the web interface:
 
 1. *Einstellungen → Empfang*: set the **server name** (it appears in the greeting, the Received header and the self-signed certificate) and check the
-   **trusted networks** – everything else has to sign in. Upload a certificate for the server name if your applications verify it.
+   **trusted networks** (by default only `127.0.0.0/8` and `::1`) – everything else has to sign in. Upload a certificate for the server name if your applications verify it.
 2. *SMTP-Konten*: one **default account**, more if some senders have to leave through another provider.
 3. *Zugänge* (relay users): one per application that sends from outside the trusted networks, limited to its senders.
 4. *Regeln*: route, rewrite, hand to webhooks, reject. Try them under *Regeln testen*.
 5. *Einstellungen → Backup*: a target (NAS share) and a plan with retention. *Einstellungen → Sicherheit*: enforce TOTP for administrators.
 
-> Keep the trusted networks narrow. `0.0.0.0/0` there makes MatSMTP an open relay.
+> Keep the trusted networks narrow: by default only this machine relays without signing in. Behind Docker's userland proxy a client from the internet
+> arrives with the address of the gateway (`172.17.0.1`), so `172.16.0.0/12` (let alone `0.0.0.0/0`) there turns a published port into an open relay.
+> Add a LAN range only consciously (a printer that cannot sign in) and only when the port is not reachable from the internet.
 
 ### 3. Pointing applications at MatSMTP
 
 | What | Setting |
 |---|---|
-| Any application / device | SMTP server: the Docker host, port **587** with STARTTLS (or 25, or 465 with TLS); a relay user if it is not in a trusted network |
+| Any application / device | SMTP server: the Docker host, port **587** with STARTTLS (or 25, or 465 with TLS) and a relay user |
 | Postfix | `relayhost = [smtp.example.com]:587` (plus `smtp_sasl_*` with a relay user from outside the trusted networks) |
 | Synology / TrueNAS notifications | SMTP server and port as above, "Secure connection: STARTTLS" |
-| Printer / scanner (scan to mail) | Often no TLS: port 25 from a trusted network |
-| A quick test | `curl --url smtp://localhost:25 --mail-from app@example.com --mail-rcpt you@example.org -T mail.txt` |
+| Printer / scanner (scan to mail) | Often no TLS: a relay user on port 25 from the LAN, or its address added to the trusted networks |
+| A quick test | `curl --url smtp://localhost:25 --user app:<password> --mail-from app@example.com --mail-rcpt you@example.org -T mail.txt` |
 
 ### 4. From source
 

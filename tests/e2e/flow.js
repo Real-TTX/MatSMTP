@@ -122,6 +122,11 @@ function smtp(from, to, subject, port = 2025, extra = []) {
       await page.fill('[name="Input.RejectMessage"]', 'An Testdomains wird nicht versendet.');
     });
 
+    // The host reaches the dev stack through the Docker gateway: only here the private range may relay without signing in.
+    await page.goto(base + '/Admin/Smtp');
+    await page.fill('[name="Input.TrustedNetworks"]', '127.0.0.0/8\n::1/128\n172.16.0.0/12');
+    await save(page);
+
     // mails over real SMTP
     console.log(smtp('bestellung@shop.example.com', 'kunde@example.org', 'Ihre Bestellung 10482'));
     console.log(smtp('bestellung@shop.example.com', 'kundin@example.net', 'Ihre Bestellung 10483'));

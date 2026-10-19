@@ -18,7 +18,9 @@ NODE_PATH=<folder with playwright-core>/node_modules node tools/icons.js   # PNG
 ```
 
 Test and look at changes by **rebuilding the container and redeploying the stack**, not with a watcher. Wait for `http://localhost:2525/health`. A real mail:
-`curl --url smtp://localhost:2025 --mail-from a@example.com --mail-rcpt b@example.org -T mail.txt` (SMTP account "mailpit", port 1025, no TLS, no auth catches it).
+`curl --url smtp://localhost:2025 --user <relay user>:<password> --mail-from a@example.com --mail-rcpt b@example.org -T mail.txt` (SMTP account "mailpit", port 1025,
+no TLS, no auth catches it). Only the loopback relays without a sign-in; from the host into the dev stack the client is the Docker gateway (`tests/e2e/flow.js` adds
+`172.16.0.0/12` to the trusted networks of the dev stack for its plain mails).
 A migration: `dotnet ef migrations add <Name> -p src/MatSmtp -s src/MatSmtp -o Data/Migrations` (`dotnet tool restore` first).
 
 ## Layout

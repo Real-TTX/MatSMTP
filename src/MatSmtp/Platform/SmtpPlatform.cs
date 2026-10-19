@@ -86,7 +86,8 @@ public sealed class SmtpPlatform(
         o.Field(new MatField("trustedNetworks", T("Ohne Anmeldung aus", "Without sign-in from"), "text")
         {
             Max = 2000,
-            Hint = T("Netze, die ohne Zugang senden dürfen (CIDR, mit Komma getrennt). Leer: niemand. Nie 0.0.0.0/0.", "Networks that may send without a relay user (CIDR, separated by commas). Empty: nobody. Never 0.0.0.0/0."),
+            Hint = T("Netze, die ohne Zugang versenden dürfen (CIDR, mit Komma getrennt). Standard: nur 127.0.0.0/8, ::1. Ein privates Netz nur bewusst: hinter dem Docker-Proxy kommen Clients aus dem Internet mit 172.17.0.1 an.",
+                "Networks that may relay without a relay user (CIDR, separated by commas). Default: only 127.0.0.0/8, ::1. A private range only consciously: behind Docker's proxy clients from the internet arrive as 172.17.0.1."),
         });
         o.Field(new MatField("relayHost", T("SMTP-Server", "SMTP server"), "text")
         {

@@ -52,8 +52,15 @@ public sealed class SmtpConfig
     /// <summary>Every session has to sign in with a relay user, also from a trusted network.</summary>
     public bool RequireAuth { get; set; }
 
-    /// <summary>Clients from these networks may send without signing in (CIDR, separated by commas). Empty: nobody.</summary>
-    public string TrustedNetworks { get; set; } = DefaultPrivateNetworks;
+    /// <summary>
+    /// Clients from these networks may relay without signing in (CIDR, separated by commas). Empty: nobody. By default only this machine: behind Docker's
+    /// userland proxy a client from the internet arrives with the address of the gateway (172.17.0.1), so a private range here can make an open relay.
+    /// Widen it consciously (a printer in the LAN); applications sign in with their relay user anyway.
+    /// </summary>
+    public string TrustedNetworks { get; set; } = DefaultTrustedNetworks;
+
+    /// <summary>Relaying without a sign-in: only the loopback.</summary>
+    public const string DefaultTrustedNetworks = "127.0.0.0/8, ::1/128";
 
     /// <summary>The loopback and the private ranges (RFC 1918, unique local IPv6): this machine, the LAN and the Docker networks.</summary>
     public const string DefaultPrivateNetworks = "127.0.0.0/8, ::1/128, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7";

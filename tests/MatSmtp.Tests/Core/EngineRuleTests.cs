@@ -39,6 +39,25 @@ public sealed class EngineRuleTests
     }
 
     [Fact]
+    public void By_default_only_the_loopback_relays_without_signing_in_not_the_docker_gateway()
+    {
+        var smtp = new SmtpConfig();
+        Assert.True(Services.Relay.SmtpListener.RelayWithoutAuth(smtp, IPAddress.Loopback));
+        Assert.True(Services.Relay.SmtpListener.RelayWithoutAuth(smtp, IPAddress.IPv6Loopback));
+        // Behind Docker's userland proxy a client from the internet arrives as the gateway.
+        Assert.False(Services.Relay.SmtpListener.RelayWithoutAuth(smtp, IPAddress.Parse("172.17.0.1")));
+        Assert.False(Services.Relay.SmtpListener.RelayWithoutAuth(smtp, IPAddress.Parse("192.168.1.20")));
+        Assert.False(Services.Relay.SmtpListener.RelayWithoutAuth(smtp, IPAddress.Parse("10.253.130.5")));
+        Assert.False(Services.Relay.SmtpListener.RelayWithoutAuth(smtp, null));
+
+        // Widened consciously it holds, unless every session has to sign in.
+        smtp.TrustedNetworks = "192.168.0.0/16";
+        Assert.True(Services.Relay.SmtpListener.RelayWithoutAuth(smtp, IPAddress.Parse("192.168.1.20")));
+        smtp.RequireAuth = true;
+        Assert.False(Services.Relay.SmtpListener.RelayWithoutAuth(smtp, IPAddress.Parse("192.168.1.20")));
+    }
+
+    [Fact]
     public void The_status_names_the_container_port_of_smtp_and_whether_tls_is_needed()
     {
         Assert.Equal((2025, "none"), ManagementApi.SendPort(new SmtpConfig()));

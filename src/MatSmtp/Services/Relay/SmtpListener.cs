@@ -174,6 +174,10 @@ public sealed class SmtpListener(ConfigStore config, IServiceScopeFactory scopes
     public static bool PlainAuthAllowed(SmtpConfig smtp, IPAddress? client)
         => smtp.AllowPlainAuth || IpNetworks.Contains(smtp.PlainAuthNetworks, client);
 
+    /// <summary>Whether a client may relay without signing in: only from the trusted networks (by default the loopback), and not when every session has to sign in.</summary>
+    public static bool RelayWithoutAuth(SmtpConfig smtp, IPAddress? client)
+        => !smtp.RequireAuth && IpNetworks.Contains(smtp.TrustedNetworks, client);
+
     private static bool AuthWithoutTls(SmtpConfig smtp, ISessionContext context)
         => (context.Pipe?.IsSecure ?? false) || PlainAuthAllowed(smtp, Session(context).ClientIp);
 
@@ -216,8 +220,7 @@ public sealed class SmtpListener(ConfigStore config, IServiceScopeFactory scopes
                 return Task.FromResult(true);
             }
 
-            var smtp = config.Current.Smtp;
-            if (!smtp.RequireAuth && IpNetworks.Contains(smtp.TrustedNetworks, Session(context).ClientIp))
+            if (RelayWithoutAuth(config.Current.Smtp, Session(context).ClientIp))
             {
                 return Task.FromResult(true);
             }
