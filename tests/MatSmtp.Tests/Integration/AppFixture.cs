@@ -46,6 +46,9 @@ public class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>The plain SMTP port of the receiver (STARTTLS offered).</summary>
     public int SmtpPort { get; } = FreePort();
 
+    /// <summary>The submission port (STARTTLS offered; AUTH never without it).</summary>
+    public int SubmissionPort { get; } = FreePort();
+
     /// <summary>The port with TLS from the first byte.</summary>
     public int TlsPort { get; } = FreePort();
 
@@ -64,7 +67,7 @@ public class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
         Directory.CreateDirectory(DataDir);
         Environment.SetEnvironmentVariable("MATSMTP_DATA", DataDir);
         Environment.SetEnvironmentVariable("MATSMTP__Smtp__Port", SmtpPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        Environment.SetEnvironmentVariable("MATSMTP__Smtp__SubmissionPort", "0");
+        Environment.SetEnvironmentVariable("MATSMTP__Smtp__SubmissionPort", SubmissionPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Environment.SetEnvironmentVariable("MATSMTP__Smtp__TlsPort", TlsPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
         // Every fixture sets every variable (also to nothing): the environment is shared by the fixtures that run one after the other.
         Environment.SetEnvironmentVariable(ManagementApiOptions.KeyVariable, ApiKey);

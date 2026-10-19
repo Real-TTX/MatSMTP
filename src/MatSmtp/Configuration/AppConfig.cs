@@ -66,12 +66,14 @@ public sealed class SmtpConfig
     public const string DefaultPrivateNetworks = "127.0.0.0/8, ::1/128, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7";
 
     /// <summary>
-    /// Clients from these networks may sign in (AUTH) without TLS (CIDR, separated by commas): the applications in the same Docker network or LAN, which
-    /// cannot check a self-signed certificate. Everywhere else AUTH is offered only after STARTTLS or on the TLS port. Empty: nobody.
+    /// Clients from these networks may sign in (AUTH) without TLS (CIDR, separated by commas), and only on the internal SMTP port <see cref="Port"/> (2025, which
+    /// Mattiverse does not publish): the applications in the same Docker network, which cannot check a self-signed certificate. On the submission and the TLS
+    /// port AUTH always needs TLS, whatever the address. Empty: nobody.
     /// </summary>
     public string PlainAuthNetworks { get; set; } = DefaultPrivateNetworks;
 
-    /// <summary>AUTH is offered without TLS to every client (the password in clear text, also over the internet): only when every network in between is trusted.</summary>
+    /// <summary>AUTH without TLS on <see cref="Port"/> from every address (the password in clear text): only when that port is reachable from trusted networks alone.
+    /// Never on the submission or the TLS port.</summary>
     public bool AllowPlainAuth { get; set; }
 
     /// <summary>

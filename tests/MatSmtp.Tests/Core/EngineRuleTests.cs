@@ -23,19 +23,35 @@ public sealed class EngineRuleTests
         => Assert.Equal(expected, SenderRewrite.CompleteDomain(sender, domain));
 
     [Fact]
-    public void Auth_without_tls_is_allowed_from_the_private_networks_only_unless_it_is_allowed_everywhere()
+    public void Auth_without_tls_is_allowed_only_on_the_internal_port_and_there_only_from_the_private_networks()
     {
+        static bool Plain(SmtpConfig smtp, int port, string? ip) => Services.Relay.SmtpListener.PlainAuthAllowed(smtp, port, ip is null ? null : IPAddress.Parse(ip));
         var smtp = new SmtpConfig();
-        Assert.True(Services.Relay.SmtpListener.PlainAuthAllowed(smtp, IPAddress.Parse("172.18.0.5")));
-        Assert.True(Services.Relay.SmtpListener.PlainAuthAllowed(smtp, IPAddress.Parse("192.168.1.20")));
-        Assert.True(Services.Relay.SmtpListener.PlainAuthAllowed(smtp, IPAddress.Loopback));
-        Assert.False(Services.Relay.SmtpListener.PlainAuthAllowed(smtp, IPAddress.Parse("203.0.113.9")));
-        Assert.False(Services.Relay.SmtpListener.PlainAuthAllowed(smtp, null));
+        Assert.True(Plain(smtp, 2025, "172.18.0.5"));
+        Assert.True(Plain(smtp, 2025, "192.168.1.20"));
+        Assert.True(Plain(smtp, 2025, "127.0.0.1"));
+        Assert.False(Plain(smtp, 2025, "203.0.113.9"));
+        Assert.False(Plain(smtp, 2025, null));
+
+        // Submission and the TLS port: never in clear, also from the Docker network.
+        foreach (var port in new[] { 2587, 2465 })
+        {
+            Assert.False(Plain(smtp, port, "172.18.0.5"));
+            Assert.False(Plain(smtp, port, "127.0.0.1"));
+        }
 
         smtp.PlainAuthNetworks = "";
-        Assert.False(Services.Relay.SmtpListener.PlainAuthAllowed(smtp, IPAddress.Parse("172.18.0.5")));
+        Assert.False(Plain(smtp, 2025, "172.18.0.5"));
+
+        // "From everywhere" is about the internal port only.
         smtp.AllowPlainAuth = true;
-        Assert.True(Services.Relay.SmtpListener.PlainAuthAllowed(smtp, IPAddress.Parse("203.0.113.9")));
+        Assert.True(Plain(smtp, 2025, "203.0.113.9"));
+        Assert.False(Plain(smtp, 2587, "203.0.113.9"));
+        Assert.False(Plain(smtp, 2465, "203.0.113.9"));
+
+        // The internal port switched off: no AUTH in clear anywhere.
+        smtp.Port = 0;
+        Assert.False(Plain(smtp, 0, "172.18.0.5"));
     }
 
     [Fact]
@@ -62,7 +78,7 @@ public sealed class EngineRuleTests
     {
         Assert.Equal((2025, "none"), ManagementApi.SendPort(new SmtpConfig()));
         Assert.Equal((2025, "starttls"), ManagementApi.SendPort(new SmtpConfig { PlainAuthNetworks = "" }));
-        Assert.Equal((2587, "none"), ManagementApi.SendPort(new SmtpConfig { Port = 0 }));
+        Assert.Equal((2587, "starttls"), ManagementApi.SendPort(new SmtpConfig { Port = 0 }));
         Assert.Equal((2465, "tls"), ManagementApi.SendPort(new SmtpConfig { Port = 0, SubmissionPort = 0 }));
     }
 

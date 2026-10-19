@@ -44,8 +44,8 @@
         <div class="mat-form__grid">
             <ms-switch for="Input.RequireAuth" label="Anmeldung immer verlangen" full="true" hint="Dann muss jede Anwendung sich mit einem Zugang anmelden, auch aus dem eigenen Netz." />
             <ms-textarea for="Input.TrustedNetworks" label="Vertrauenswürdige Netze (ohne Anmeldung)" rows="4" full="true" show-if="Input.RequireAuth" show-value="false" hint="Ein Netz pro Zeile. Clients daraus dürfen ohne Anmeldung über MatSMTP versenden; Standard ist nur dieser Rechner (127.0.0.0/8, ::1). Ein privates Netz (192.168.0.0/16) nur bewusst eintragen, etwa für einen Drucker: hinter dem Docker-Proxy kommen Clients aus dem Internet mit der Adresse des Gateways (172.17.0.1) an, und 172.16.0.0/12 oder 0.0.0.0/0 wäre dann ein offenes Relay. Anwendungen melden sich mit ihrem Zugang an." />
-            <ms-textarea for="Input.PlainAuthNetworks" label="Anmeldung ohne TLS aus diesen Netzen" rows="4" full="true" show-if="Input.AllowPlainAuth" show-value="false" hint="Ein Netz pro Zeile. Anwendungen daraus (das Docker-Netz, das LAN) dürfen sich ohne STARTTLS anmelden, weil sie einem selbst signierten Zertifikat meist nicht trauen. Von überall sonst nur mit TLS. Leer: niemand." />
-            <ms-switch for="Input.AllowPlainAuth" label="Anmeldung ohne TLS von überall erlauben" full="true" hint="Das Passwort geht dann auch über das Internet im Klartext: nur, wenn jedes Netz dazwischen vertrauenswürdig ist." />
+            <ms-textarea for="Input.PlainAuthNetworks" label="Anmeldung ohne TLS auf dem SMTP-Port aus diesen Netzen" rows="4" full="true" show-if="Input.AllowPlainAuth" show-value="false" hint="Ein Netz pro Zeile. Nur auf dem internen SMTP-Port (im Container 2025): Anwendungen aus diesen Netzen (dem Docker-Netz) dürfen sich dort ohne STARTTLS anmelden, weil sie einem selbst signierten Zertifikat meist nicht trauen. Auf Submission und dem TLS-Port gilt immer: erst TLS, dann Anmeldung. Leer: niemand." />
+            <ms-switch for="Input.AllowPlainAuth" label="Anmeldung ohne TLS auf dem SMTP-Port von überall erlauben" full="true" hint="Das Passwort geht dann im Klartext: nur, wenn der SMTP-Port (2025) ausschließlich aus vertrauenswürdigen Netzen erreichbar ist. Submission und der TLS-Port verlangen immer TLS." />
         </div>
     </ms-card>
 
@@ -103,7 +103,7 @@
     <dl class="mat-kv">
         <dt>SMTP-Server</dt><dd>Adresse des Docker-Hosts (oder <span class="mat-mono">@Model.Input.Hostname</span>, wenn der Name auf ihn zeigt)</dd>
         <dt>Port</dt><dd>25 oder 587 mit STARTTLS, 465 mit TLS (so in der docker-compose.yml nach außen gegeben; im Container @Model.Input.Port, @Model.Input.SubmissionPort und @Model.Input.TlsPort)</dd>
-        <dt>Anmeldung</dt><dd>@(Model.Input.RequireAuth ? "immer mit einem Zugang" : "aus vertrauenswürdigen Netzen ohne, sonst mit einem Zugang") (<a href="/RelayUsers">Zugänge</a>); ohne TLS nur aus den freigegebenen Netzen</dd>
+        <dt>Anmeldung</dt><dd>@(Model.Input.RequireAuth ? "immer mit einem Zugang" : "aus vertrauenswürdigen Netzen ohne, sonst mit einem Zugang") (<a href="/RelayUsers">Zugänge</a>); ohne TLS nur auf Port @Model.Input.Port aus den freigegebenen Netzen</dd>
         <dt>Im Docker-Netz</dt><dd>Anwendungen im selben Netz erreichen MatSMTP unter dem Namen des Containers auf Port @Model.Input.Port, ohne TLS, mit ihrem Zugang</dd>
     </dl>
 </ms-card>

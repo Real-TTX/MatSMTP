@@ -18,7 +18,7 @@ public sealed record ListenerState(bool Running, IReadOnlyList<string> Endpoints
 
 /// <summary>
 /// The SMTP side of the relay: listens on the ports of the settings (plain with STARTTLS, submission, TLS from the start), lets applications in by their network
-/// or by a relay user (AUTH PLAIN / LOGIN: over TLS, or without it from the networks of <see cref="SmtpConfig.PlainAuthNetworks"/>), and hands every message to
+/// or by a relay user (AUTH PLAIN / LOGIN: over TLS, or without it on the internal port from the networks of <see cref="SmtpConfig.PlainAuthNetworks"/>), and hands every message to
 /// <see cref="RelayService"/>. A change of the settings restarts it; the certificate is asked
 /// for per connection, so a new one needs no restart.
 /// </summary>
@@ -152,7 +152,7 @@ public sealed class SmtpListener(ConfigStore config, IServiceScopeFactory scopes
             if (c.Command is AuthCommand && !AuthWithoutTls(config.Current.Smtp, c.Context))
             {
                 // The client did not ask EHLO what is offered: refused before the password is checked (it may have crossed the network in clear already).
-                throw new SmtpResponseException(new SmtpResponse((SmtpReplyCode)538, "5.7.11 Erst STARTTLS, dann anmelden: ohne TLS geht AUTH nur aus den freigegebenen Netzen."));
+                throw new SmtpResponseException(new SmtpResponse((SmtpReplyCode)538, "5.7.11 Erst STARTTLS, dann anmelden: ohne TLS geht AUTH nur auf dem internen Port aus den freigegebenen Netzen."));
             }
 
             if (c.Command is EhloCommand ehlo)
@@ -168,18 +168,19 @@ public sealed class SmtpListener(ConfigStore config, IServiceScopeFactory scopes
     }
 
     /// <summary>
-    /// Whether this session may sign in (AUTH): always over TLS (STARTTLS or the TLS port); without TLS only from the networks of
-    /// <see cref="SmtpConfig.PlainAuthNetworks"/> (the Docker network, the LAN) or from everywhere with <see cref="SmtpConfig.AllowPlainAuth"/>.
+    /// Whether a session on <paramref name="port"/> may sign in (AUTH) without TLS: only on the internal SMTP port (<see cref="SmtpConfig.Port"/>, 2025, not published
+    /// by Mattiverse) and there only from the networks of <see cref="SmtpConfig.PlainAuthNetworks"/> (the Docker network), or from every address with
+    /// <see cref="SmtpConfig.AllowPlainAuth"/>. On the submission port and the TLS port AUTH always needs TLS, so a password never crosses the internet in clear.
     /// </summary>
-    public static bool PlainAuthAllowed(SmtpConfig smtp, IPAddress? client)
-        => smtp.AllowPlainAuth || IpNetworks.Contains(smtp.PlainAuthNetworks, client);
+    public static bool PlainAuthAllowed(SmtpConfig smtp, int port, IPAddress? client)
+        => port > 0 && port == smtp.Port && (smtp.AllowPlainAuth || IpNetworks.Contains(smtp.PlainAuthNetworks, client));
 
     /// <summary>Whether a client may relay without signing in: only from the trusted networks (by default the loopback), and not when every session has to sign in.</summary>
     public static bool RelayWithoutAuth(SmtpConfig smtp, IPAddress? client)
         => !smtp.RequireAuth && IpNetworks.Contains(smtp.TrustedNetworks, client);
 
     private static bool AuthWithoutTls(SmtpConfig smtp, ISessionContext context)
-        => (context.Pipe?.IsSecure ?? false) || PlainAuthAllowed(smtp, Session(context).ClientIp);
+        => (context.Pipe?.IsSecure ?? false) || PlainAuthAllowed(smtp, context.EndpointDefinition.Endpoint.Port, Session(context).ClientIp);
 
     /// <summary>EHLO offers AUTH only to a session that may use it (<see cref="AuthWithoutTls"/>): a client never sends a password it should not.</summary>
     private sealed class CommandFactory(ConfigStore config) : SmtpCommandFactory

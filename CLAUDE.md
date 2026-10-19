@@ -54,8 +54,10 @@ A migration: `dotnet ef migrations add <Name> -p src/MatSmtp -s src/MatSmtp -o D
   create / edit on a separate page; buttons in one row positive to negative (`ms-buttons`). Dependent fields with `show-if` / `data-show-if` (hidden fields are disabled
   and not posted). No inline scripts or styles (CSP); a value that is data is a `data-*` attribute that `app.js` turns into a custom property (`data-bar`). Icons from the
   sprite (`Ui.Icon`); `IconTests` checks every name. A toolkit switch hides its checkbox: browser tests click the `label.mat-switch`.
-- **AUTH without TLS** only from `Smtp.PlainAuthNetworks` (default: loopback and private ranges, i.e. the Docker network): EHLO offers AUTH per session
-  (`SmtpListener.CommandFactory`), an AUTH that was not offered is answered 538. A relay user's allowed senders are checked for the envelope and the header From.
+- **No open relay**: without signing in only from `Smtp.TrustedNetworks` (default: the loopback only; Docker's userland proxy makes internet clients look like
+  172.17.0.1). **AUTH without TLS** only on the internal port `Smtp.Port` (2025, not published by Mattiverse) and there only from `Smtp.PlainAuthNetworks`
+  (default: private ranges, the Docker network); submission and TLS port always need TLS. EHLO offers AUTH per session (`SmtpListener.CommandFactory`), an AUTH
+  that was not offered is answered 538. A relay user's allowed senders are checked for the envelope and the header From.
 - **Colour**: sun yellow `#e8a200` with dark text on it (`--mat-app-on-accent`) and a darker gold for links (`--mat-app-accent-text: #805c00`), set in `app.css`.
   Colour is never the only signal (pills carry words and icons).
 - **Formatting**: invariant request culture; numbers and dates for people with `Fmt` (de-DE).

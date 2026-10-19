@@ -147,19 +147,19 @@ public static class ManagementApi
     }
 
     /// <summary>
-    /// The port applications INSIDE the Docker network send to (the container port, not a published one) and how: the SMTP port (2025; else the
-    /// submission port) without TLS when AUTH without TLS is allowed from the private networks (the default: the applications sit in the same Docker
-    /// network and cannot check a self-signed certificate), else with STARTTLS; the TLS port only when nothing else listens.
+    /// The port applications INSIDE the Docker network send to (the container port, not a published one) and how: the internal SMTP port (2025) without TLS
+    /// while AUTH without TLS is allowed there from the private networks (the default: the applications sit in the same Docker network and cannot check a
+    /// self-signed certificate), else with STARTTLS; without that port the submission port with STARTTLS; the TLS port only when nothing else listens.
     /// </summary>
     public static (int Port, string Tls) SendPort(SmtpConfig smtp)
     {
-        var port = smtp.Port > 0 ? smtp.Port : smtp.SubmissionPort;
-        if (port <= 0)
+        if (smtp.Port > 0)
         {
-            return (Math.Max(0, smtp.TlsPort), "tls");
+            return (smtp.Port, smtp.AllowPlainAuth || !string.IsNullOrWhiteSpace(smtp.PlainAuthNetworks) ? "none" : "starttls");
         }
 
-        return (port, smtp.AllowPlainAuth || !string.IsNullOrWhiteSpace(smtp.PlainAuthNetworks) ? "none" : "starttls");
+        // AUTH without TLS exists only on the internal port: on the submission port it needs STARTTLS.
+        return smtp.SubmissionPort > 0 ? (smtp.SubmissionPort, "starttls") : (Math.Max(0, smtp.TlsPort), "tls");
     }
 
     private static RelayUserView View(RelayUser u) => new(

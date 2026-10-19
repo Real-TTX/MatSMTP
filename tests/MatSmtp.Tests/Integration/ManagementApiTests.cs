@@ -371,6 +371,88 @@ public sealed class ManagementApiTests : IClassFixture<AppFixture>, IAsyncLifeti
         }
     }
 
+    [Fact]
+    public async Task On_the_submission_port_a_client_from_a_private_address_gets_no_auth_before_starttls_and_cannot_relay_without_it()
+    {
+        using var client = _app.ApiClient();
+        var password = (await BodyAsync(await client.PutAsync("/api/v1/relay-users/submitter", Json("""{"allowedSenders":["*"],"managedBy":"mattiverse"}""")))).GetProperty("password").GetString()!;
+
+        try
+        {
+            // 127.0.0.1 is in the private networks of plain AUTH, the trusted networks are empty: like an app in the Docker network on 2587.
+            using (var smtp = new SmtpClient { Timeout = 10000 })
+            {
+                await smtp.ConnectAsync("127.0.0.1", _app.SubmissionPort, SecureSocketOptions.None);
+                Assert.Empty(smtp.AuthenticationMechanisms);
+                var refused = await Assert.ThrowsAsync<MailKit.ServiceNotAuthenticatedException>(() => smtp.SendAsync(Mail("app@example.com", "kunde@example.test", "Submission ohne Anmeldung")));
+                Assert.Contains("Bitte zuerst anmelden", refused.Message);
+                await smtp.DisconnectAsync(true);
+            }
+
+            await AssertAuthRefusedInClearAsync(_app.SubmissionPort, "submitter", password);
+
+            // After STARTTLS it is offered and the message goes through.
+            using (var smtp = new SmtpClient { Timeout = 10000, ServerCertificateValidationCallback = (_, _, _, _) => true })
+            {
+                await smtp.ConnectAsync("127.0.0.1", _app.SubmissionPort, SecureSocketOptions.StartTls);
+                Assert.Contains("PLAIN", smtp.AuthenticationMechanisms);
+                await smtp.AuthenticateAsync("submitter", password);
+                await smtp.SendAsync(Mail("app@example.com", "kunde@example.test", "Submission mit TLS"));
+                await smtp.DisconnectAsync(true);
+            }
+
+            await UpstreamAsync("Submission mit TLS");
+
+            // The same client on the internal port may sign in in clear.
+            using (var smtp = new SmtpClient { Timeout = 10000 })
+            {
+                await smtp.ConnectAsync("127.0.0.1", _app.SmtpPort, SecureSocketOptions.None);
+                Assert.Contains("PLAIN", smtp.AuthenticationMechanisms);
+                await smtp.AuthenticateAsync("submitter", password);
+                await smtp.DisconnectAsync(true);
+            }
+
+            // "From everywhere" does not reach the submission port.
+            await _app.WithScopeAsync(sp =>
+            {
+                sp.GetRequiredService<ConfigStore>().Update(c => c.Smtp.AllowPlainAuth = true);
+                return Task.CompletedTask;
+            });
+            await AssertAuthRefusedInClearAsync(_app.SubmissionPort, "submitter", password);
+        }
+        finally
+        {
+            await _app.WithScopeAsync(sp =>
+            {
+                sp.GetRequiredService<ConfigStore>().Update(c => c.Smtp.AllowPlainAuth = false);
+                return Task.CompletedTask;
+            });
+            await client.DeleteAsync("/api/v1/relay-users/submitter?managedBy=mattiverse");
+        }
+    }
+
+    /// <summary>A plain connection to <paramref name="port"/>: EHLO offers no AUTH, and an AUTH sent anyway is answered 538.</summary>
+    private static async Task AssertAuthRefusedInClearAsync(int port, string user, string password)
+    {
+        using var tcp = new System.Net.Sockets.TcpClient();
+        await tcp.ConnectAsync("127.0.0.1", port);
+        using var stream = tcp.GetStream();
+        using var reader = new StreamReader(stream, Encoding.ASCII);
+        using var writer = new StreamWriter(stream, Encoding.ASCII) { NewLine = "\r\n", AutoFlush = true };
+        Assert.StartsWith("220", await reader.ReadLineAsync());
+        await writer.WriteLineAsync("EHLO test");
+        string? line;
+        while ((line = await reader.ReadLineAsync()) is not null && line.StartsWith("250-", StringComparison.Ordinal))
+        {
+            Assert.DoesNotContain("AUTH", line);
+        }
+
+        Assert.DoesNotContain("AUTH", line);
+        await writer.WriteLineAsync("AUTH PLAIN " + Convert.ToBase64String(Encoding.UTF8.GetBytes("\0" + user + "\0" + password)));
+        Assert.StartsWith("538", await reader.ReadLineAsync());
+        await writer.WriteLineAsync("QUIT");
+    }
+
     private static MimeMessage Mail(string from, string to, string subject)
     {
         var m = new MimeMessage();

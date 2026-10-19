@@ -234,16 +234,21 @@ docker compose -f docker-compose.dev.yml up -d --build    # development stack
 
 Everything else – trusted networks, sign-in rules, size limit, retries, retention, pause – lives in the web interface and in `/data/config/app.json`.
 
-### Signing in without TLS
+### Who may send, and signing in without TLS
 
-SMTP AUTH sends the password. MatSMTP offers it
-
-- always over TLS: after `STARTTLS` on 25 / 587, or on 465;
-- **without TLS only to clients from the networks of *Anmeldung ohne TLS aus diesen Netzen*** (*Einstellungen → Empfang*; default: the loopback and the
-  private ranges `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`). Applications in the same Docker network or LAN sign in on the plain port
-  without having to trust the self-signed certificate; a client from anywhere else is not offered AUTH before `STARTTLS`, and one that sends `AUTH` anyway
-  hears `538 5.7.11` before its password is looked at;
-- from everywhere only when *Anmeldung ohne TLS von überall erlauben* is switched on.
+- **Relaying without signing in** only from the *trusted networks* (*Einstellungen → Empfang*), by default **only this machine** (`127.0.0.0/8`, `::1`).
+  Behind Docker's userland proxy a client from the internet arrives with the address of the gateway (`172.17.0.1`); with a private range there a published
+  port would be an open relay. Every application signs in with its relay user.
+- **SMTP AUTH** (it sends the password) is offered:
+  - always over TLS: after `STARTTLS` on 25 / 587 (2025 / 2587 in the container), or on 465 (2465);
+  - **without TLS only on the internal SMTP port (2025 in the container) and there only to clients from *Anmeldung ohne TLS auf dem SMTP-Port aus diesen
+    Netzen*** (default: the loopback and the private ranges `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`). That is the port the
+    applications in the Docker network use; Mattiverse does not publish it, so a password in clear never crosses the internet, and the applications need not
+    trust the self-signed certificate;
+  - **on the submission port (587 / 2587) and the TLS port never without TLS**, whatever the address of the client;
+  - a client that sends `AUTH` where it is not offered hears `538 5.7.11` before its password is looked at.
+- *Anmeldung ohne TLS auf dem SMTP-Port von überall erlauben* lifts the network check on the internal port only (when that port is reachable from trusted
+  networks alone); it never opens the submission or the TLS port.
 
 Rules and sender rewriting apply to signed-in senders as to everyone else, and a relay user with *erlaubte Absender* may only use those, in the envelope
 (`MAIL FROM`) and in the `From` of the header.
@@ -284,8 +289,9 @@ for nothing here.
 | `GET /api/v1/settings` | `{"setupCompleted": true, "defaultSenderDomain": "example.com"}` |
 | `PUT /api/v1/settings` | the same body; either field may be left out; answers like `GET`. `400` for a domain that is none |
 
-**`smtpPort` / `smtpTls`** are what an application **inside the Docker network** uses: the container port of plain SMTP (`2025`), `none` while AUTH without
-TLS is allowed from the private networks (the default, see above), else `starttls`; `tls` with the TLS port only when nothing else listens.
+**`smtpPort` / `smtpTls`** are what an application **inside the Docker network** uses: the internal SMTP port (`2025`), `none` while AUTH without TLS is
+allowed there from the private networks (the default, see above), else `starttls`; without that port the submission port with `starttls` (AUTH never
+without TLS there), the TLS port with `tls` only when nothing else listens.
 
 **Relay users.** `{id}` is `[a-z0-9-]{2,64}` and is also the SMTP user name. The body:
 
