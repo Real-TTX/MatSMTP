@@ -1,13 +1,11 @@
-using MatSmtp.Data;
-using MatSmtp.Data.Entities;
 using MatSmtp.Services;
+using MatSmtp.Services.Auth;
 using MatSmtp.UiKit;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Admin.Users;
 
 /// <summary>Everybody who can sign in: administrators and users.</summary>
-public sealed class IndexModel(MsDbContext db, ICurrentUser current) : PageModelBase
+public sealed class IndexModel(UserService users, ICurrentUser current) : PageModelBase
 {
     public ToolbarModel Toolbar { get; private set; } = null!;
 
@@ -19,34 +17,7 @@ public sealed class IndexModel(MsDbContext db, ICurrentUser current) : PageModel
     {
         Head("Benutzer", "Wer sich anmelden kann und was er darf.", ("Einstellungen", null), ("Benutzer", null));
 
-        var spec = new ListSpec<User>
-        {
-            Id = "users",
-            Action = "/Admin/Users",
-            Label = "Benutzer",
-            Noun = "Benutzer",
-            SearchPlaceholder = "Name oder E-Mail-Adresse ...",
-            Search = (q, text) =>
-            {
-                var like = Like.Contains(text);
-                return q.Where(u => EF.Functions.Like(u.DisplayName, like, Like.Escape) || EF.Functions.Like(u.Email, like, Like.Escape));
-            },
-            Filters =
-            [
-                new FilterSpec<User>("rolle", "Rolle", ListBuilder.EnumOptions<UserRole>(Labels.Of), (q, v) => q.Where(u => u.Role == Enum.Parse<UserRole>(v))),
-                new FilterSpec<User>("status", "Status", [new("aktiv", "Aktiv"), new("gesperrt", "Gesperrt")], (q, v) => v == "gesperrt" ? q.Where(u => !u.IsActive) : q.Where(u => u.IsActive)),
-            ],
-            Sorts = new Dictionary<string, (string, Func<IQueryable<User>, bool, IOrderedQueryable<User>>)>
-            {
-                ["name"] = ("Name", (q, d) => d ? q.OrderByDescending(u => u.DisplayName) : q.OrderBy(u => u.DisplayName)),
-                ["email"] = ("E-Mail", (q, d) => d ? q.OrderByDescending(u => u.Email) : q.OrderBy(u => u.Email)),
-                ["role"] = ("Rolle", (q, d) => d ? q.OrderByDescending(u => u.Role).ThenBy(u => u.DisplayName) : q.OrderBy(u => u.Role).ThenBy(u => u.DisplayName)),
-                ["login"] = ("Letzte Anmeldung", (q, d) => d ? q.OrderByDescending(u => u.LastLoginDate) : q.OrderBy(u => u.LastLoginDate)),
-            },
-            DefaultSort = "name",
-        };
-
-        var result = await ListBuilder.RunAsync(db.User.AsNoTracking().Include(u => u.Totp), Request, spec, HttpContext.RequestAborted);
+        var result = await users.ListAsync(Request, HttpContext.RequestAborted);
         Toolbar = result.Toolbar;
         Pager = result.Pager;
         var me = current.UserId;

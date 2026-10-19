@@ -1,17 +1,15 @@
 using System.ComponentModel.DataAnnotations;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Auth;
 using MatSmtp.UiKit;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Admin.Users;
 
 /// <summary>One account: name, address, job, department, role, whether it may sign in, a new password, the second factor and the sessions.</summary>
-public sealed class EditModel(MsDbContext db, UserService users, SignInService signIn, TwoFactorService twoFactor, SessionCache cache, ICurrentUser current, ActivityLogger log, TimeProvider clock) : PageModelBase
+public sealed class EditModel(UserService users, SignInService signIn, TwoFactorService twoFactor, ICurrentUser current, ActivityLogger log, TimeProvider clock) : PageModelBase
 {
     public sealed class InputModel
     {
@@ -114,22 +112,19 @@ public sealed class EditModel(MsDbContext db, UserService users, SignInService s
 
         if (Account is null)
         {
-            var created = await users.CreateAsync(email, Input.DisplayName.Trim(), Input.Role, Input.Password!);
-            created.Phone = string.IsNullOrWhiteSpace(Input.Phone) ? null : Input.Phone.Trim();
-            created.IsActive = Input.IsActive;
-            await db.SaveChangesAsync();
+            var created = await users.CreateAsync(email, Input.DisplayName.Trim(), Input.Role, Input.Password!, Input.Phone, Input.IsActive, HttpContext.RequestAborted);
             await log.LogAsync("Benutzer angelegt", "User", created.Id, $"{created.Email} ({Labels.Of(created.Role)})");
             Flash("Der Benutzer ist angelegt.");
             return RedirectToPage("/Admin/Users/Edit", new { id = created.Id });
         }
 
-        var user = await db.User.FirstAsync(u => u.Id == Account.Id);
-        var roleChanged = user.Role != Input.Role;
-        user.DisplayName = Input.DisplayName.Trim();
-        user.Email = email;
-        user.Phone = string.IsNullOrWhiteSpace(Input.Phone) ? null : Input.Phone.Trim();
-        user.Role = Input.Role;
-        await db.SaveChangesAsync();
+        var roleChanged = Account.Role != Input.Role;
+        var user = await users.UpdateAsync(Account.Id, Input.DisplayName, email, Input.Phone, Input.Role, HttpContext.RequestAborted);
+        if (user is null)
+        {
+            return NotFound();
+        }
+
         if (user.IsActive != Input.IsActive)
         {
             await users.SetActiveAsync(user, Input.IsActive);
@@ -140,7 +135,6 @@ public sealed class EditModel(MsDbContext db, UserService users, SignInService s
             await users.ChangePasswordAsync(user, Input.Password);
         }
 
-        cache.InvalidateUser(user.Id);
         await log.LogAsync("Benutzer geändert", "User", user.Id, roleChanged ? $"{user.Email}, neue Rolle: {Labels.Of(user.Role)}" : user.Email);
         Flash("Der Benutzer ist gespeichert.");
         return RedirectToPage("/Admin/Users/Edit", new { id = user.Id });
@@ -148,7 +142,7 @@ public sealed class EditModel(MsDbContext db, UserService users, SignInService s
 
     public async Task<IActionResult> OnPostResetTotpAsync()
     {
-        var user = await db.User.Include(u => u.Totp).FirstOrDefaultAsync(u => u.Id == Id);
+        var user = Id is { } id ? await users.FindForChangeAsync(id, HttpContext.RequestAborted) : null;
         if (user is null)
         {
             return NotFound();
@@ -177,23 +171,18 @@ public sealed class EditModel(MsDbContext db, UserService users, SignInService s
 
     public async Task<IActionResult> OnPostUnlockAsync()
     {
-        var user = await db.User.FirstOrDefaultAsync(u => u.Id == Id);
-        if (user is null)
+        if (Id is not { } id || !await users.UnlockAsync(id, HttpContext.RequestAborted))
         {
             return NotFound();
         }
 
-        user.FailedLogins = 0;
-        user.LockoutEndDate = null;
-        await db.SaveChangesAsync();
-        cache.InvalidateUser(user.Id);
         Flash("Die Sperre nach falschen Anmeldungen ist aufgehoben.");
         return RedirectToPage(new { id = Id });
     }
 
     public async Task<IActionResult> OnPostDeleteAsync()
     {
-        var user = await db.User.FirstOrDefaultAsync(u => u.Id == Id);
+        var user = Id is { } id ? await users.FindAsync(id, HttpContext.RequestAborted) : null;
         if (user is null)
         {
             return RedirectToPage("/Admin/Users/Index");
@@ -205,35 +194,31 @@ public sealed class EditModel(MsDbContext db, UserService users, SignInService s
             return RedirectToPage(new { id = Id });
         }
 
-        if (user.Role == UserRole.Admin && user.IsActive && !await db.User.AnyAsync(u => u.Id != user.Id && u.Role == UserRole.Admin && u.IsActive))
+        if (user.Role == UserRole.Admin && user.IsActive && !await users.OtherActiveAdminExistsAsync(user.Id, HttpContext.RequestAborted))
         {
             FlashError("Das ist der einzige aktive Administrator.");
             return RedirectToPage(new { id = Id });
         }
 
-        await signIn.EndAllSessionsAsync(user.Id, null);
-        db.User.Remove(user);
-        await db.SaveChangesAsync();
-        cache.InvalidateUser(user.Id);
+        await users.DeleteAsync(user.Id, HttpContext.RequestAborted);
         await log.LogAsync("Benutzer gelöscht", "User", user.Id, user.Email);
         Flash("Der Benutzer ist gelöscht. Seine Einträge bleiben erhalten.");
         return RedirectToPage("/Admin/Users/Index");
     }
 
-    private Task<bool> OtherAdminExistsAsync() => db.User.AnyAsync(u => u.Id != Id && u.Role == UserRole.Admin && u.IsActive);
+    private Task<bool> OtherAdminExistsAsync() => users.OtherActiveAdminExistsAsync(Id, HttpContext.RequestAborted);
 
     private async Task<bool> LoadAsync()
     {
         if (Id is { } id)
         {
-            Account = await db.User.AsNoTracking().Include(u => u.Totp).FirstOrDefaultAsync(u => u.Id == id);
+            Account = await users.FindAsync(id, HttpContext.RequestAborted);
             if (Account is null)
             {
                 return false;
             }
 
-            var now = clock.GetUtcNow().UtcDateTime;
-            Sessions = await db.UserSession.CountAsync(s => s.UserId == id && s.RevokedDate == null && s.ExpiresDate > now);
+            Sessions = await signIn.CountActiveSessionsAsync(id, HttpContext.RequestAborted);
         }
 
         var title = Id is null ? "Neuer Benutzer" : Account!.DisplayName;

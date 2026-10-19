@@ -1,16 +1,14 @@
 using System.Security.Claims;
 using MatSmtp.Core.Security;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Auth;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Account;
 
 /// <summary>The second factor (authenticator app, recovery codes) and the devices that are signed in.</summary>
-public sealed class SecurityModel(MsDbContext db, ICurrentUser current, TwoFactorService twoFactor, SignInService signIn, TimeProvider clock, ActivityLogger log) : PageModelBase
+public sealed class SecurityModel(UserService users, ICurrentUser current, TwoFactorService twoFactor, SignInService signIn, ActivityLogger log) : PageModelBase
 {
     public sealed record SessionRow(long Id, string Device, string? Ip, DateTime LastSeen, DateTime Created, bool IsThis);
 
@@ -97,12 +95,8 @@ public sealed class SecurityModel(MsDbContext db, ICurrentUser current, TwoFacto
 
     public async Task<IActionResult> OnPostEndSessionAsync(long id)
     {
-        var session = await db.UserSession.FirstOrDefaultAsync(s => s.Id == id && s.UserId == current.UserId);
-        if (session is not null)
+        if (await signIn.EndSessionAsync(id, current.UserId!.Value, HttpContext.RequestAborted))
         {
-            session.RevokedDate = clock.GetUtcNow().UtcDateTime;
-            await db.SaveChangesAsync();
-            HttpContext.RequestServices.GetRequiredService<SessionCache>().InvalidateUser(session.UserId);
             Flash("Das Gerät ist abgemeldet.");
         }
 
@@ -141,7 +135,8 @@ public sealed class SecurityModel(MsDbContext db, ICurrentUser current, TwoFacto
         return false;
     }
 
-    private Task<User> LoadUserAsync() => db.User.Include(u => u.Totp).FirstAsync(u => u.Id == current.UserId);
+    private async Task<User> LoadUserAsync()
+        => await users.FindForChangeAsync(current.UserId!.Value, HttpContext.RequestAborted) ?? throw new InvalidOperationException("The signed-in user is gone.");
 
     private async Task LoadAsync(User? user = null)
     {
@@ -155,10 +150,7 @@ public sealed class SecurityModel(MsDbContext db, ICurrentUser current, TwoFacto
 
         RequiredButMissing = !Enabled && user.Role == UserRole.Admin && HttpContext.RequestServices.GetRequiredService<Configuration.ConfigStore>().Current.Security.RequireTotpForAdmins;
         var token = ThisSession();
-        var now = clock.GetUtcNow().UtcDateTime;
-        Sessions = (await db.UserSession.AsNoTracking()
-                .Where(s => s.UserId == user.Id && s.RevokedDate == null && s.ExpiresDate > now)
-                .OrderByDescending(s => s.LastSeenDate).ToListAsync())
+        Sessions = (await signIn.ActiveSessionsAsync(user.Id, HttpContext.RequestAborted))
             .Select(s => new SessionRow(s.Id, DeviceName(s.UserAgent), s.IpAddress, s.LastSeenDate, s.CreateDate, s.Token == token))
             .ToList();
     }

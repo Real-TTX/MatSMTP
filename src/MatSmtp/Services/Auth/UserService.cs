@@ -1,6 +1,7 @@
 using MatSmtp.Core.Security;
 using MatSmtp.Data;
 using MatSmtp.Data.Entities;
+using MatSmtp.UiKit;
 using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Services.Auth;
@@ -137,6 +138,121 @@ public sealed class UserService(MsDbContext db, SignInService signIn, SessionCac
         await db.SaveChangesAsync(ct);
         return user;
     }
+
+    /// <summary>The list of the users page: search, filter, sort and page of the request, with the second factor of each.</summary>
+    public Task<ListResult<User>> ListAsync(HttpRequest request, CancellationToken ct)
+    {
+        var spec = new ListSpec<User>
+        {
+            Id = "users",
+            Action = "/Admin/Users",
+            Label = "Benutzer",
+            Noun = "Benutzer",
+            SearchPlaceholder = "Name oder E-Mail-Adresse ...",
+            Search = (q, text) =>
+            {
+                var like = Like.Contains(text);
+                return q.Where(u => EF.Functions.Like(u.DisplayName, like, Like.Escape) || EF.Functions.Like(u.Email, like, Like.Escape));
+            },
+            Filters =
+            [
+                new FilterSpec<User>("rolle", "Rolle", ListBuilder.EnumOptions<UserRole>(Labels.Of), (q, v) => q.Where(u => u.Role == Enum.Parse<UserRole>(v))),
+                new FilterSpec<User>("status", "Status", [new("aktiv", "Aktiv"), new("gesperrt", "Gesperrt")], (q, v) => v == "gesperrt" ? q.Where(u => !u.IsActive) : q.Where(u => u.IsActive)),
+            ],
+            Sorts = new Dictionary<string, (string, Func<IQueryable<User>, bool, IOrderedQueryable<User>>)>
+            {
+                ["name"] = ("Name", (q, d) => d ? q.OrderByDescending(u => u.DisplayName) : q.OrderBy(u => u.DisplayName)),
+                ["email"] = ("E-Mail", (q, d) => d ? q.OrderByDescending(u => u.Email) : q.OrderBy(u => u.Email)),
+                ["role"] = ("Rolle", (q, d) => d ? q.OrderByDescending(u => u.Role).ThenBy(u => u.DisplayName) : q.OrderBy(u => u.Role).ThenBy(u => u.DisplayName)),
+                ["login"] = ("Letzte Anmeldung", (q, d) => d ? q.OrderByDescending(u => u.LastLoginDate) : q.OrderBy(u => u.LastLoginDate)),
+            },
+            DefaultSort = "name",
+        };
+
+        return ListBuilder.RunAsync(db.User.AsNoTracking().Include(u => u.Totp), request, spec, ct);
+    }
+
+    /// <summary>A user with its second factor, for reading; null when there is none.</summary>
+    public Task<User?> FindAsync(long id, CancellationToken ct = default)
+        => db.User.AsNoTracking().Include(u => u.Totp).FirstOrDefaultAsync(u => u.Id == id, ct);
+
+    /// <summary>A user with its second factor, to change it with the methods of this class or of <see cref="TwoFactorService"/>; null when there is none.</summary>
+    public Task<User?> FindForChangeAsync(long id, CancellationToken ct = default)
+        => db.User.Include(u => u.Totp).FirstOrDefaultAsync(u => u.Id == id, ct);
+
+    /// <summary>Whether another active administrator than <paramref name="exceptUserId"/> exists: there must always be one.</summary>
+    public Task<bool> OtherActiveAdminExistsAsync(long? exceptUserId, CancellationToken ct = default)
+        => db.User.AnyAsync(u => u.Id != exceptUserId && u.Role == UserRole.Admin && u.IsActive, ct);
+
+    /// <summary>Creates a user with a telephone number and whether it may sign in.</summary>
+    public async Task<User> CreateAsync(string email, string displayName, UserRole role, string password, string? phone, bool isActive, CancellationToken ct = default)
+    {
+        var user = await CreateAsync(email, displayName, role, password, ct);
+        user.Phone = Clean(phone);
+        user.IsActive = isActive;
+        await db.SaveChangesAsync(ct);
+        return user;
+    }
+
+    /// <summary>Changes name, address, telephone and role of a user (the users page); null when there is none.</summary>
+    public async Task<User?> UpdateAsync(long id, string displayName, string email, string? phone, UserRole role, CancellationToken ct = default)
+    {
+        var user = await db.User.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null)
+        {
+            return null;
+        }
+
+        user.DisplayName = displayName.Trim();
+        user.Email = SignInService.NormalizeEmail(email);
+        user.Phone = Clean(phone);
+        user.Role = role;
+        await db.SaveChangesAsync(ct);
+        cache.InvalidateUser(user.Id);
+        return user;
+    }
+
+    /// <summary>Changes what a person sets on their own profile (from <see cref="FindForChangeAsync"/>).</summary>
+    public async Task UpdateProfileAsync(User user, string displayName, string? phone, string theme, CancellationToken ct = default)
+    {
+        user.DisplayName = displayName.Trim();
+        user.Phone = Clean(phone);
+        user.Theme = theme is "light" or "dark" ? theme : "system";
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Lifts the lock after wrong passwords; false when there is no such user.</summary>
+    public async Task<bool> UnlockAsync(long id, CancellationToken ct = default)
+    {
+        var user = await db.User.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null)
+        {
+            return false;
+        }
+
+        user.FailedLogins = 0;
+        user.LockoutEndDate = null;
+        await db.SaveChangesAsync(ct);
+        cache.InvalidateUser(user.Id);
+        return true;
+    }
+
+    /// <summary>Deletes a user (softly) after ending every session of it; its entries stay. The caller checks who may be deleted.</summary>
+    public async Task DeleteAsync(long id, CancellationToken ct = default)
+    {
+        var user = await db.User.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null)
+        {
+            return;
+        }
+
+        await signIn.EndAllSessionsAsync(user.Id, null, ct);
+        db.User.Remove(user);
+        await db.SaveChangesAsync(ct);
+        cache.InvalidateUser(user.Id);
+    }
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     public async Task SetActiveAsync(User user, bool active, CancellationToken ct = default)
     {

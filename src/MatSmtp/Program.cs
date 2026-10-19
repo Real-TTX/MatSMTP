@@ -81,6 +81,7 @@ builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<MessageService>();
 builder.Services.AddScoped<RuleService>();
 builder.Services.AddScoped<WebhookAdminService>();
+builder.Services.AddScoped<ActivityService>();
 builder.Services.AddScoped<DeliveryService>();
 builder.Services.AddScoped<WebhookService>();
 builder.Services.AddHttpClient(WebhookService.HttpClientName);

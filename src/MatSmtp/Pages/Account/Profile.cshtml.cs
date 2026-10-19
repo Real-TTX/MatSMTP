@@ -1,16 +1,14 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using MatSmtp.Core.Security;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Auth;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Account;
 
-public sealed class ProfileModel(MsDbContext db, ICurrentUser current, UserService users, SignInService signIn, ActivityLogger log) : PageModelBase
+public sealed class ProfileModel(ICurrentUser current, UserService users, SignInService signIn, ActivityLogger log) : PageModelBase
 {
     public sealed class ProfileInput
     {
@@ -67,10 +65,7 @@ public sealed class ProfileModel(MsDbContext db, ICurrentUser current, UserServi
             return Page();
         }
 
-        user.DisplayName = Profile.DisplayName.Trim();
-        user.Phone = string.IsNullOrWhiteSpace(Profile.Phone) ? null : Profile.Phone.Trim();
-        user.Theme = Profile.Theme is "light" or "dark" ? Profile.Theme : "system";
-        await db.SaveChangesAsync();
+        await users.UpdateProfileAsync(user, Profile.DisplayName, Profile.Phone, Profile.Theme, HttpContext.RequestAborted);
         await signIn.RefreshAsync(HttpContext, user);
         Flash("Dein Profil ist gespeichert.");
         return RedirectToPage();
@@ -109,7 +104,7 @@ public sealed class ProfileModel(MsDbContext db, ICurrentUser current, UserServi
     }
 
     private async Task<User> LoadAsync()
-        => await db.User.Include(u => u.Totp).FirstAsync(u => u.Id == current.UserId);
+        => await users.FindForChangeAsync(current.UserId!.Value, HttpContext.RequestAborted) ?? throw new InvalidOperationException("The signed-in user is gone.");
 
     private void Prepare(User user)
     {

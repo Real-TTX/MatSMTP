@@ -151,6 +151,37 @@ public sealed class SignInService(MsDbContext db, ConfigStore config, TimeProvid
     public Task<User?> FindActiveAsync(long userId, CancellationToken ct = default)
         => db.User.Include(u => u.Totp).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive, ct);
 
+    /// <summary>The sessions of a user that are still valid, the most recently used first.</summary>
+    public Task<List<UserSession>> ActiveSessionsAsync(long userId, CancellationToken ct = default)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        return db.UserSession.AsNoTracking()
+            .Where(s => s.UserId == userId && s.RevokedDate == null && s.ExpiresDate > now)
+            .OrderByDescending(s => s.LastSeenDate).ToListAsync(ct);
+    }
+
+    /// <summary>How many sessions of a user are still valid.</summary>
+    public Task<int> CountActiveSessionsAsync(long userId, CancellationToken ct = default)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        return db.UserSession.CountAsync(s => s.UserId == userId && s.RevokedDate == null && s.ExpiresDate > now, ct);
+    }
+
+    /// <summary>Ends one session of a user (a device on the security page); false when the user has no such session.</summary>
+    public async Task<bool> EndSessionAsync(long sessionId, long userId, CancellationToken ct = default)
+    {
+        var session = await db.UserSession.FirstOrDefaultAsync(s => s.Id == sessionId && s.UserId == userId, ct);
+        if (session is null)
+        {
+            return false;
+        }
+
+        session.RevokedDate = clock.GetUtcNow().UtcDateTime;
+        await db.SaveChangesAsync(ct);
+        cache.InvalidateUser(userId);
+        return true;
+    }
+
     /// <summary>Ends every session of a user (password changed, user switched off).</summary>
     public async Task EndAllSessionsAsync(long userId, Guid? except = null, CancellationToken ct = default)
     {
