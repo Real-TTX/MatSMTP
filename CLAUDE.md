@@ -31,6 +31,11 @@ A migration: `dotnet ef migrations add <Name> -p src/MatSmtp -s src/MatSmtp -o D
   become paths), `CertificateService` (uploaded PFX/PEM or a kept self-signed one), `SpoolSignal`.
 - `Pages/`: `Index` (overview), `Messages/` (list + queue share `MessageListModel` and `_MessageList`, `Details`), `Rules/`, `RuleTest`, `Accounts/`, `RelayUsers/`,
   `Webhooks/`, `Tools/Send`, `Share/Index` (`/s/{token}`, anonymous), `Admin/` (Smtp, Delivery, Users, Shares, Backup, Security, Activity, System), `Account/`.
+- `Services/Relay/` also holds the business layer of the pages: `RelayUserService` (pages, management API, SMTP AUTH), `AccountService`, `RelayStatusService`
+  (overview, menu badges, platform tiles and health), `RelaySettingsService` (the platform settings), `MessageService`. **No `MsDbContext` or EF LINQ in a page model,
+  an endpoint or a view**: a page calls a service.
+- `Api/ManagementApi.cs`: the engine API `/api/v1` for Mattiverse (key `MATSMTP_API_KEY`, see README). `Platform/`: `SmtpPlatform` (the MatApiDefinition and its values)
+  and `SmtpIdentityUsers` (sign-in through MatIdentity). `MatPlatform/` is a **copy** from MatDesign (`node tools/matplatform-copy.js` there): never edit it here.
 - `UiKit/` (table with optional selection, toolbar, pager, shell/menu, labels), `Controls/` (tag helpers `ms-*`), `wwwroot/` (app.css, app.js, `ui/` = MatUi copy).
 
 ## Conventions
@@ -47,6 +52,8 @@ A migration: `dotnet ef migrations add <Name> -p src/MatSmtp -s src/MatSmtp -o D
   create / edit on a separate page; buttons in one row positive to negative (`ms-buttons`). Dependent fields with `show-if` / `data-show-if` (hidden fields are disabled
   and not posted). No inline scripts or styles (CSP); a value that is data is a `data-*` attribute that `app.js` turns into a custom property (`data-bar`). Icons from the
   sprite (`Ui.Icon`); `IconTests` checks every name. A toolkit switch hides its checkbox: browser tests click the `label.mat-switch`.
+- **AUTH without TLS** only from `Smtp.PlainAuthNetworks` (default: loopback and private ranges, i.e. the Docker network): EHLO offers AUTH per session
+  (`SmtpListener.CommandFactory`), an AUTH that was not offered is answered 538. A relay user's allowed senders are checked for the envelope and the header From.
 - **Colour**: sun yellow `#e8a200` with dark text on it (`--mat-app-on-accent`) and a darker gold for links (`--mat-app-accent-text: #805c00`), set in `app.css`.
   Colour is never the only signal (pills carry words and icons).
 - **Formatting**: invariant request culture; numbers and dates for people with `Fmt` (de-DE).

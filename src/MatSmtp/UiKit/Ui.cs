@@ -12,7 +12,7 @@ public static class AppVersion
 
     private static string Read()
     {
-        var informational = Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var informational = typeof(AppVersion).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         return string.IsNullOrWhiteSpace(informational) ? "local" : informational.Split('+')[0];
     }
 }

@@ -1,10 +1,13 @@
 using System.Globalization;
+using MatPlatform;
+using MatSmtp.Api;
 using MatSmtp.Configuration;
 using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Auth;
 using MatSmtp.Services.Backup;
+using MatSmtp.Platform;
 using MatSmtp.Services.Relay;
 using MatSmtp.UiKit;
 using Microsoft.AspNetCore.Antiforgery;
@@ -71,6 +74,11 @@ builder.Services.AddSingleton<SpoolStore>();
 builder.Services.AddSingleton<SpoolSignal>();
 builder.Services.AddSingleton<CertificateService>();
 builder.Services.AddScoped<RelayService>();
+builder.Services.AddScoped<RelayUserService>();
+builder.Services.AddScoped<RelayStatusService>();
+builder.Services.AddScoped<RelaySettingsService>();
+builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<MessageService>();
 builder.Services.AddScoped<DeliveryService>();
 builder.Services.AddScoped<WebhookService>();
 builder.Services.AddHttpClient(WebhookService.HttpClientName);
@@ -88,6 +96,20 @@ builder.Services.AddScoped<ShellFactory>();
 
 builder.Services.AddAntiforgery(o => o.HeaderName = "RequestVerificationToken");
 
+// The management API of the engine (/api/v1, for Mattiverse): its own key MATSMTP_API_KEY.
+var managementApi = ManagementApiOptions.From(builder.Configuration);
+builder.Services.AddSingleton(managementApi);
+
+// The Mat platform contract (MatDesign docs/PLATFORM.md): /api, /api/health, /api/state, /api/configure, /api/actions (the package MatPlatform, a copy in
+// MatPlatform/; SmtpPlatform describes MatSMTP and supplies the values), and the optional sign-in through MatIdentity (MATIDENTITY_*). The key of the platform
+// endpoints is MAT_API_KEY; without it the engine key MATSMTP_API_KEY serves there too, so a caller that only knows the engine key can read the tiles.
+if (string.IsNullOrWhiteSpace(builder.Configuration[MatPlatformSettings.ApiKeyVariable]) && managementApi.Key is { } engineKey)
+{
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { [MatPlatformSettings.ApiKeyVariable] = engineKey });
+}
+
+var platform = builder.AddMatPlatform<SmtpPlatform>(SmtpPlatform.Describe);
+
 builder.Services.AddAuthentication(SignInService.CookieScheme)
     .AddCookie(SignInService.CookieScheme, options =>
     {
@@ -99,6 +121,13 @@ builder.Services.AddAuthentication(SignInService.CookieScheme)
         options.AccessDeniedPath = "/Account/AccessDenied";
         options.SlidingExpiration = false;
         options.EventsType = typeof(SessionCookieEvents);
+    })
+    // Sign-in through MatIdentity, only when MATIDENTITY_AUTHORITY is set (nothing changes without it).
+    .AddMatIdentitySignIn<SmtpIdentityUsers>(platform, options =>
+    {
+        options.CookieScheme = SignInService.CookieScheme;
+        options.LoginPath = "/Account/Login";
+        options.AccessDeniedPath = "/Account/AccessDenied";
     });
 
 builder.Services.AddAuthorizationBuilder()
@@ -147,6 +176,13 @@ var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Sta
 
 await DatabaseInitializer.InitializeAsync(app.Services, config, logger);
 
+// A headless installation (Mattiverse): the administrator from the environment, the setup page is skipped.
+using (var scope = app.Services.CreateScope())
+{
+    await scope.ServiceProvider.GetRequiredService<UserService>().SeedAdminAsync(
+        builder.Configuration["MATSMTP_ADMIN_PASSWORD"], builder.Configuration["MATSMTP_ADMIN_EMAIL"]);
+}
+
 app.UseForwardedHeaders();
 app.UseRequestLocalization();
 
@@ -185,17 +221,20 @@ app.UseStaticFiles(new StaticFileOptions
         }
     },
 });
+// The rate limit of the anonymous platform endpoints /api and /api/health.
+app.UseRateLimiter();
 app.UseAuthentication();
 
-// While there is no administrator the only page is the one that makes the first one.
+// While the first start is not done the only page is the one that makes the first administrator; the APIs and the sign-in through MatIdentity answer anyway.
 app.Use(async (context, next) =>
 {
     var path = context.Request.Path;
-    if (!path.StartsWithSegments("/Account/Setup") && !path.StartsWithSegments("/health") && !path.StartsWithSegments("/css")
+    if (!path.StartsWithSegments("/Account/Setup") && !path.StartsWithSegments("/health") && !path.StartsWithSegments("/api") && !path.StartsWithSegments("/css")
         && !path.StartsWithSegments("/js") && !path.StartsWithSegments("/ui") && !path.StartsWithSegments("/img") && !path.StartsWithSegments("/Offline")
         && !path.Value!.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) && !path.Value.EndsWith(".webmanifest", StringComparison.OrdinalIgnoreCase)
         && path.Value != "/sw.js"
-        && !await context.RequestServices.GetRequiredService<SetupState>().HasAdminAsync(context.RequestServices))
+        && !path.StartsWithSegments(MatIdentitySignIn.CallbackPath) && !path.StartsWithSegments(MatIdentitySignIn.SignedOutCallbackPath)
+        && !await context.RequestServices.GetRequiredService<SetupState>().IsDoneAsync(context.RequestServices, context.RequestAborted))
     {
         context.Response.Redirect("/Account/Setup");
         return;
@@ -206,13 +245,10 @@ app.Use(async (context, next) =>
 
 app.UseAuthorization();
 
-app.MapGet("/health", async (MsDbContext db) =>
-{
-    await db.Database.CanConnectAsync();
-    return Results.Text("ok");
-}).AllowAnonymous();
+// The plain check of older scripts; the platform's /api/health says more (and is what the image checks).
+app.MapGet("/health", async (SystemService system) => await system.CanConnectAsync() ? Results.Text("ok") : Results.Text("down", statusCode: 503)).AllowAnonymous();
 
-app.MapPost("/api/theme", async (HttpContext http, IAntiforgery antiforgery, MsDbContext db, SignInService signIn, ICurrentUser user) =>
+app.MapPost("/api/theme", async (HttpContext http, IAntiforgery antiforgery, UserService users, SignInService signIn, ICurrentUser user) =>
 {
     await antiforgery.ValidateRequestAsync(http);
     var theme = http.Request.Form["theme"].ToString();
@@ -221,17 +257,14 @@ app.MapPost("/api/theme", async (HttpContext http, IAntiforgery antiforgery, MsD
         return Results.BadRequest();
     }
 
-    var entity = await db.User.Include(u => u.Totp).FirstAsync(u => u.Id == id);
-    entity.Theme = theme;
-    await db.SaveChangesAsync();
-    await signIn.RefreshAsync(http, entity);
+    await signIn.RefreshAsync(http, await users.SetThemeAsync(id, theme));
     return Results.NoContent();
 }).RequireAuthorization("SignedIn");
 
 // The content of a message as it was received (and rewritten), for a mail program. Users and administrators only (the fallback policy).
-app.MapGet("/messages/{id:long}/eml", async (long id, HttpContext http, MsDbContext db, SpoolStore spool) =>
+app.MapGet("/messages/{id:long}/eml", async (long id, HttpContext http, MessageService messages, SpoolStore spool) =>
 {
-    var message = await db.Message.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id);
+    var message = await messages.FindAsync(id, http.RequestAborted);
     if (message is null || !spool.Exists(message.StorageKey))
     {
         return Results.NotFound();
@@ -241,41 +274,17 @@ app.MapGet("/messages/{id:long}/eml", async (long id, HttpContext http, MsDbCont
     return Results.File(spool.OpenRead(message.StorageKey!), "message/rfc822", $"nachricht-{id}.eml");
 });
 
-// The badges and the counts of the overview, for a refresh without reloading the page.
-app.MapGet("/api/status", async (MsDbContext db, SmtpListener listener) => Results.Ok(new
-{
-    listener = listener.State.Running,
-    queued = await db.Message.CountAsync(m => m.Status == MessageStatus.Queued || m.Status == MessageStatus.Sending),
-    deferred = await db.Message.CountAsync(m => m.Status == MessageStatus.Deferred),
-    failed = await db.Message.CountAsync(m => m.Status == MessageStatus.Failed),
-}));
+// The management API of the engine (/api/v1, X-Api-Key = MATSMTP_API_KEY) and the platform contract next to it: /api and /api/health anonymous
+// and rate limited, /api/state, /api/configure and /api/actions with X-Api-Key (MAT_API_KEY, else MATSMTP_API_KEY) or a token of MatIdentity.
+app.MapManagementApi();
+app.MapMatPlatform();
 
 app.MapRazorPages();
 
 await app.RunAsync();
 return 0;
 
-/// <summary>Whether the first administrator exists: the question is asked on every request until the answer is yes, then never again.</summary>
-public sealed class SetupState
-{
-    private volatile bool _done;
-
-    public async Task<bool> HasAdminAsync(IServiceProvider services)
-    {
-        if (_done)
-        {
-            return true;
-        }
-
-        var db = services.GetRequiredService<MsDbContext>();
-        _done = await db.User.AnyAsync(u => u.Role == UserRole.Admin);
-        return _done;
-    }
-
-    public void MarkDone() => _done = true;
-}
-
-/// <summary>The command <c>dotnet MatSmtp.dll --healthcheck</c>: asks the running site; exit code 0 means healthy.</summary>
+/// <summary>The command <c>dotnet MatSmtp.dll --healthcheck</c>: asks <c>/api/health</c> of the running site; exit code 0 means ok or degraded (200), 1 down (503) or no answer.</summary>
 public static class HealthCheck
 {
     public static async Task<int> RunAsync()
@@ -284,7 +293,7 @@ public static class HealthCheck
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-            using var response = await client.GetAsync($"http://localhost:{port}/health");
+            using var response = await client.GetAsync($"http://localhost:{port}/api/health");
             return response.IsSuccessStatusCode ? 0 : 1;
         }
         catch (HttpRequestException)

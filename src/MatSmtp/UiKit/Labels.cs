@@ -116,4 +116,10 @@ public static class Labels
     };
 
     public static string Of(DayOfWeek d) => Services.Fmt.Culture.DateTimeFormat.GetDayName(d);
+
+    /// <summary>The badge of a record that another program manages through the API: "von Mattiverse" for <c>mattiverse</c>.</summary>
+    public static string ManagedBy(string managedBy) => "von " + Manager(managedBy);
+
+    /// <summary>The name of the program that manages a record: <c>mattiverse</c> becomes "Mattiverse".</summary>
+    public static string Manager(string managedBy) => managedBy.Length == 0 ? managedBy : char.ToUpperInvariant(managedBy[0]) + managedBy[1..];
 }

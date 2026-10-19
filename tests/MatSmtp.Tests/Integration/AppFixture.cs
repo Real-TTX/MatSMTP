@@ -1,10 +1,18 @@
 using System.Net;
 using System.Net.Sockets;
 using System.Text.RegularExpressions;
+using MatPlatform;
+using MatSmtp.Api;
 using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services.Auth;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,8 +24,23 @@ namespace MatSmtp.Tests.Integration;
 /// The whole application in memory, with its own data folder (SQLite file, spool, keys, certificates) and its SMTP receiver on free ports of 127.0.0.1. Needs
 /// nothing outside: no database server, no Docker.
 /// </summary>
-public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
+public class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
 {
+    /// <summary>The key of the management API (<c>MATSMTP_API_KEY</c>); without <c>MAT_API_KEY</c> it is the key of the platform endpoints too.</summary>
+    public const string EngineKey = "engine-key-0123456789abcdef";
+
+    /// <summary><c>MATSMTP_API_KEY</c> of this fixture; null: the management API is off.</summary>
+    protected virtual string? ApiKey => EngineKey;
+
+    /// <summary><c>MAT_API_KEY</c> of this fixture; null: the engine key serves the platform endpoints.</summary>
+    protected virtual string? PlatformKey => null;
+
+    /// <summary><c>MATSMTP_ADMIN_PASSWORD</c> of this fixture: a headless installation.</summary>
+    protected virtual string? AdminPassword => null;
+
+    /// <summary><c>MATIDENTITY_AUTHORITY</c> of this fixture: the sign-in through MatIdentity (one that does not need to run).</summary>
+    protected virtual string? Authority => null;
+
     public string DataDir { get; } = Path.Combine(Path.GetTempPath(), "ms-it-" + Guid.NewGuid().ToString("N")[..8]);
 
     /// <summary>The plain SMTP port of the receiver (STARTTLS offered).</summary>
@@ -43,7 +66,58 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
         Environment.SetEnvironmentVariable("MATSMTP__Smtp__Port", SmtpPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
         Environment.SetEnvironmentVariable("MATSMTP__Smtp__SubmissionPort", "0");
         Environment.SetEnvironmentVariable("MATSMTP__Smtp__TlsPort", TlsPort.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        // Every fixture sets every variable (also to nothing): the environment is shared by the fixtures that run one after the other.
+        Environment.SetEnvironmentVariable(ManagementApiOptions.KeyVariable, ApiKey);
+        Environment.SetEnvironmentVariable(MatPlatformSettings.ApiKeyVariable, PlatformKey);
+        Environment.SetEnvironmentVariable("MATSMTP_ADMIN_PASSWORD", AdminPassword);
+        Environment.SetEnvironmentVariable("MATSMTP_ADMIN_EMAIL", null);
+        Environment.SetEnvironmentVariable(MatPlatformSettings.AuthorityVariable, Authority);
+        Environment.SetEnvironmentVariable(MatPlatformSettings.ClientIdVariable, null);
+        Environment.SetEnvironmentVariable(MatPlatformSettings.ClientSecretVariable, Authority is null ? null : "test-secret");
+        Environment.SetEnvironmentVariable(MatPlatformSettings.InternalUrlVariable, null);
         return base.CreateHost(builder);
+    }
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        if (Authority is not { } authority)
+        {
+            return;
+        }
+
+        // A fixed OpenID configuration: no MatIdentity has to run, the tests look at the redirects.
+        var configuration = new OpenIdConnectConfiguration
+        {
+            Issuer = authority,
+            AuthorizationEndpoint = authority + "/connect/authorize",
+            TokenEndpoint = authority + "/connect/token",
+            EndSessionEndpoint = authority + "/connect/logout",
+        };
+        builder.ConfigureTestServices(services =>
+        {
+            services.PostConfigure<OpenIdConnectOptions>(MatIdentitySignIn.Scheme, options =>
+            {
+                options.Configuration = configuration;
+                options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(configuration);
+            });
+            services.PostConfigure<JwtBearerOptions>(MatApiAccess.BearerScheme, options =>
+            {
+                options.Configuration = configuration;
+                options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(configuration);
+            });
+        });
+    }
+
+    /// <summary>A client that sends the engine key (and follows no redirect).</summary>
+    public HttpClient ApiClient(string? key = EngineKey)
+    {
+        var client = CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        if (key is not null)
+        {
+            client.DefaultRequestHeaders.Add("X-Api-Key", key);
+        }
+
+        return client;
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -152,4 +226,30 @@ public sealed class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
 public sealed class IntegrationCollection
 {
     public const string Name = "integration";
+}
+
+/// <summary>Without <c>MATSMTP_API_KEY</c> and <c>MAT_API_KEY</c>: the management API answers 503, the platform endpoints 401.</summary>
+public sealed class NoKeyFixture : AppFixture
+{
+    protected override string? ApiKey => null;
+}
+
+/// <summary>A headless installation: <c>MATSMTP_ADMIN_PASSWORD</c> makes the administrator <c>admin</c>.</summary>
+public sealed class SeededFixture : AppFixture
+{
+    public const string Password = "Seeded-Admin-2026";
+
+    protected override string? AdminPassword => Password;
+}
+
+/// <summary>With <c>MATIDENTITY_AUTHORITY</c> (a MatIdentity that does not need to run) and its own <c>MAT_API_KEY</c>.</summary>
+public sealed class IdentityFixture : AppFixture
+{
+    public const string IdentityAuthority = "http://identity.test";
+
+    public const string PlatformApiKey = "platform-key-0123456789abcdef";
+
+    protected override string? Authority => IdentityAuthority;
+
+    protected override string? PlatformKey => PlatformApiKey;
 }

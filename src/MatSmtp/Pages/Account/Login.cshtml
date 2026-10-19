@@ -11,14 +11,64 @@
         <p class="mat-muted">Anmelden</p>
     </div>
 
-    <form class="mat-form" method="post" novalidate>
-        <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
-        <ms-summary title="Die Anmeldung hat nicht geklappt." />
-        <ms-input for="Input.Email" label="E-Mail-Adresse" type="email" autocomplete="username" inputmode="email" autofocus />
-        <ms-input for="Input.Password" label="Passwort" type="password" autocomplete="current-password" />
-        <div class="mat-btn-row mat-btn-row--plain">
-            <button type="submit" class="mat-btn mat-btn--primary mat-btn--block">@Ui.Icon("login")<span>Anmelden</span></button>
+    @if (Model.SsoError)
+    {
+        <div class="mat-alert mat-alert--danger" role="alert" id="login-sso-error">
+            @Ui.Icon("x-circle")
+            <div class="mat-alert__body"><span>MatIdentity hat die Anmeldung nicht bestätigt oder ist gerade nicht erreichbar. Versuche es noch einmal, oder melde dich hier mit deinem Konto in MatSMTP an.</span></div>
         </div>
-    </form>
+    }
 
+    @if (Model.PendingLink is { } link)
+    {
+        <div class="mat-alert mat-alert--info" role="status" id="login-link">
+            @Ui.Icon("key")
+            <div class="mat-alert__body">
+                <strong>Konto mit MatIdentity verbinden</strong>
+                <span>In MatSMTP gibt es schon ein Konto mit der Adresse <strong>@(link.Email ?? link.PreferredUserName)</strong>. Melde dich einmal mit seinem Passwort an, um es mit MatIdentity zu verbinden; danach führt die Anmeldung über MatIdentity direkt in dieses Konto.</span>
+                <span>Ist es nicht deins, brich ab: dann wird nichts verbunden. Eine Anmeldung mit einem anderen Konto verbindet dieses nicht.</span>
+            </div>
+            <div class="mat-alert__actions">
+                <form method="post" asp-page-handler="CancelLink" id="link-cancel-form">
+                    <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+                    <button type="submit" class="mat-btn mat-btn--secondary mat-btn--sm" id="link-cancel">@Ui.Icon("x")<span>Abbrechen</span></button>
+                </form>
+            </div>
+        </div>
+    }
+    else if (Model.LinkExpired)
+    {
+        <div class="mat-alert mat-alert--info" role="status" id="login-link-expired">
+            @Ui.Icon("info")
+            <div class="mat-alert__body"><span>Die Anfrage, ein Konto mit MatIdentity zu verbinden, gilt zehn Minuten. Melde dich noch einmal über MatIdentity an, um es erneut zu versuchen.</span></div>
+        </div>
+    }
+
+    @if (Model.IdentityEnabled)
+    {
+        <div class="mat-btn-row mat-btn-row--plain" id="login-sso">
+            <a class="mat-btn @(Model.Local ? "mat-btn--secondary" : "mat-btn--primary") mat-btn--block" href="@Model.IdentitySignInUrl" id="login-sso-button">@Ui.Icon("key")<span>Mit MatIdentity anmelden</span></a>
+        </div>
+        @if (Model.SignedOut)
+        {
+            <p class="mat-muted">Du bist abgemeldet, hier und bei MatIdentity.</p>
+        }
+        @if (!Model.Local)
+        {
+            <p class="ms-auth__alt"><a href="@Model.LocalSignInUrl" id="login-local-link">Mit einem Konto von MatSMTP anmelden</a></p>
+        }
+    }
+
+    @if (!Model.IdentityEnabled || Model.Local)
+    {
+        <form class="mat-form" method="post" novalidate id="login-form">
+            <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+            <ms-summary title="Die Anmeldung hat nicht geklappt." />
+            <ms-input for="Input.Email" label="E-Mail-Adresse oder Benutzername" type="text" autocomplete="username" autofocus />
+            <ms-input for="Input.Password" label="Passwort" type="password" autocomplete="current-password" />
+            <div class="mat-btn-row mat-btn-row--plain">
+                <button type="submit" class="mat-btn mat-btn--primary mat-btn--block">@Ui.Icon("login")<span>Anmelden</span></button>
+            </div>
+        </form>
+    }
 </div>

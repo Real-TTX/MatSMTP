@@ -1,17 +1,14 @@
 using System.ComponentModel.DataAnnotations;
-using MatSmtp.Data;
-using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Account;
 
 /// <summary>The second step: the code of the authenticator app (or a recovery code). Only here, and only with the ticket of the first step, a session is opened.</summary>
 [AllowAnonymous]
-public sealed class TwoFactorModel(MsDbContext db, TwoFactorService twoFactor, SignInService signIn, TwoFactorTicket ticket, ActivityLogger log) : PageModelBase
+public sealed class TwoFactorModel(TwoFactorService twoFactor, SignInService signIn, UserService users, TwoFactorTicket ticket, ActivityLogger log) : PageModelBase
 {
     [BindProperty]
     [Required(ErrorMessage = "Bitte gib den Code ein.")]
@@ -37,7 +34,7 @@ public sealed class TwoFactorModel(MsDbContext db, TwoFactorService twoFactor, S
             return Page();
         }
 
-        var user = await db.User.Include(u => u.Totp).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive);
+        var user = await signIn.FindActiveAsync(userId, HttpContext.RequestAborted);
         if (user is null)
         {
             return RedirectToPage("/Account/Login");
@@ -50,8 +47,8 @@ public sealed class TwoFactorModel(MsDbContext db, TwoFactorService twoFactor, S
         }
 
         ticket.Clear(HttpContext);
-        await signIn.StartSessionAsync(HttpContext, user, HttpContext.RequestAborted);
-        await log.LogAsync("Anmeldung mit zweitem Faktor", "User", user.Id, user.Email);
+        // Only now, after the second factor, a pending link of MatIdentity is taken.
+        await LoginModel.CompleteAsync(HttpContext, user, users, signIn, log, "Anmeldung mit zweitem Faktor");
         return LocalRedirect(SafeReturn(returnUrl, "/"));
     }
 }

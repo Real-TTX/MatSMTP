@@ -297,4 +297,31 @@ public static class SenderRewrite
             .Replace("{domain}", domain, StringComparison.OrdinalIgnoreCase)
             .Replace("{address}", original, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>The names that end a domain only inside a network: a sender there cannot be answered from the internet.</summary>
+    private static readonly string[] LocalSuffixes = [".local", ".localdomain", ".lan", ".internal", ".intranet", ".home.arpa", ".localhost"];
+
+    /// <summary>
+    /// The sender with the default domain when it has none (<c>root</c>) or one that only exists inside a network (<c>app@localhost</c>, <c>cron@nas</c>,
+    /// <c>backup@nas.local</c>): <c>root@example.com</c>. Anything else, an empty sender (a bounce) and an empty <paramref name="defaultDomain"/> stay as they are.
+    /// </summary>
+    public static string CompleteDomain(string address, string? defaultDomain)
+    {
+        var domain = (defaultDomain ?? "").Trim().TrimStart('@');
+        var value = address.Trim();
+        if (domain.Length == 0 || value.Length == 0)
+        {
+            return address;
+        }
+
+        if (!value.Contains('@'))
+        {
+            return value + "@" + domain;
+        }
+
+        var current = AddressPattern.DomainOf(value);
+        var local = current.Length == 0 || !current.Contains('.') || current.StartsWith('[')
+            || LocalSuffixes.Any(s => current.EndsWith(s, StringComparison.OrdinalIgnoreCase));
+        return local ? AddressPattern.LocalPartOf(value) + "@" + domain : address;
+    }
 }

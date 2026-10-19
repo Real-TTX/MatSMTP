@@ -29,6 +29,9 @@ public sealed class SystemService(MsDbContext db, SpoolStore spool, ConfigStore 
         }
     }
 
+    /// <summary>Whether the database answers (the plain check <c>/health</c>).</summary>
+    public Task<bool> CanConnectAsync(CancellationToken ct = default) => db.Database.CanConnectAsync(ct);
+
     public (int Files, long Bytes) SpoolSize() => spool.Size();
 
     /// <summary>How many rows the main tables hold, in the order the page lists them.</summary>

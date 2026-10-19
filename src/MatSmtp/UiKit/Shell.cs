@@ -1,8 +1,6 @@
 using System.Net;
-using MatSmtp.Data;
-using MatSmtp.Data.Entities;
 using MatSmtp.Services;
-using Microsoft.EntityFrameworkCore;
+using MatSmtp.Services.Relay;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace MatSmtp.UiKit;
@@ -41,7 +39,7 @@ public sealed class ShellModel
 }
 
 /// <summary>Counts shown as badges in the menu. Cached for 30 seconds: a badge may be a little late, a page must not wait for queries.</summary>
-public sealed class NavCounts(IMemoryCache cache, MsDbContext db)
+public sealed class NavCounts(IMemoryCache cache, RelayStatusService status)
 {
     public sealed record Counts(int Queue, int Deferred, int Failed);
 
@@ -49,10 +47,8 @@ public sealed class NavCounts(IMemoryCache cache, MsDbContext db)
         => (await cache.GetOrCreateAsync("nav-counts", async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
-            return new Counts(
-                await db.Message.CountAsync(m => m.Status == MessageStatus.Queued || m.Status == MessageStatus.Sending),
-                await db.Message.CountAsync(m => m.Status == MessageStatus.Deferred),
-                await db.Message.CountAsync(m => m.Status == MessageStatus.Failed));
+            var (queue, deferred, failed) = await status.BadgesAsync();
+            return new Counts(queue, deferred, failed);
         }))!;
 
     public void Invalidate() => cache.Remove("nav-counts");

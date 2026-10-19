@@ -53,10 +53,25 @@ public sealed class SmtpConfig
     public bool RequireAuth { get; set; }
 
     /// <summary>Clients from these networks may send without signing in (CIDR, separated by commas). Empty: nobody.</summary>
-    public string TrustedNetworks { get; set; } = "127.0.0.0/8, ::1/128, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7";
+    public string TrustedNetworks { get; set; } = DefaultPrivateNetworks;
 
-    /// <summary>AUTH is offered without TLS too (passwords in clear text: only inside a trusted network).</summary>
+    /// <summary>The loopback and the private ranges (RFC 1918, unique local IPv6): this machine, the LAN and the Docker networks.</summary>
+    public const string DefaultPrivateNetworks = "127.0.0.0/8, ::1/128, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, fc00::/7";
+
+    /// <summary>
+    /// Clients from these networks may sign in (AUTH) without TLS (CIDR, separated by commas): the applications in the same Docker network or LAN, which
+    /// cannot check a self-signed certificate. Everywhere else AUTH is offered only after STARTTLS or on the TLS port. Empty: nobody.
+    /// </summary>
+    public string PlainAuthNetworks { get; set; } = DefaultPrivateNetworks;
+
+    /// <summary>AUTH is offered without TLS to every client (the password in clear text, also over the internet): only when every network in between is trusted.</summary>
     public bool AllowPlainAuth { get; set; }
+
+    /// <summary>
+    /// A sender without a domain, or with one that cannot exist on the internet (<c>root</c>, <c>app@localhost</c>, <c>cron@nas</c>), gets this domain:
+    /// <c>root@example.com</c>. Empty: senders stay as they are.
+    /// </summary>
+    public string DefaultSenderDomain { get; set; } = "";
 
     public int MaxMessageSizeMb { get; set; } = 25;
 
@@ -100,6 +115,12 @@ public sealed class SecurityConfig
 
     /// <summary>Default life of a share link of a message, in days.</summary>
     public int ShareLinkDays { get; set; } = 14;
+
+    /// <summary>
+    /// The first start counts as done without an administrator from the setup page (<c>PUT /api/v1/settings</c>): an installation whose people come through
+    /// MatIdentity. With an administrator it is done anyway.
+    /// </summary>
+    public bool SetupCompleted { get; set; }
 
     [JsonIgnore]
     public int MaxFailedLogins => 5;

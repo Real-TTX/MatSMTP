@@ -73,6 +73,8 @@ public class MsDbContext(DbContextOptions<MsDbContext> options, ICurrentUser cur
         {
             e.Property(x => x.Email).UseCollation("NOCASE");
             e.HasIndex(x => x.Email).IsUnique().HasFilter("\"UpdateState\" <> 0");
+            // Also over deleted users: a subject stays with its account, so a deleted account does not come back through MatIdentity.
+            e.HasIndex(x => x.ExternalSubject).IsUnique().HasFilter("\"ExternalSubject\" IS NOT NULL");
             e.HasOne(x => x.Totp).WithOne(x => x.User).HasForeignKey<UserTotp>(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
         b.Entity<UserTotp>().HasIndex(x => x.UserId).IsUnique();
@@ -89,6 +91,7 @@ public class MsDbContext(DbContextOptions<MsDbContext> options, ICurrentUser cur
         {
             e.Property(x => x.UserName).UseCollation("NOCASE");
             e.HasIndex(x => x.UserName).IsUnique().HasFilter("\"UpdateState\" <> 0");
+            e.HasIndex(x => x.ApiId).IsUnique().HasFilter("\"UpdateState\" <> 0 AND \"ApiId\" IS NOT NULL");
         });
         b.Entity<Webhook>().HasIndex(x => x.Name);
         b.Entity<Rule>(e =>

@@ -95,8 +95,8 @@ public sealed class SignInService(MsDbContext db, ConfigStore config, TimeProvid
 
     public bool IsLockedOut(User user) => user.LockoutEndDate > clock.GetUtcNow().UtcDateTime;
 
-    /// <summary>Opens a session and signs the browser in.</summary>
-    public async Task<UserSession> StartSessionAsync(HttpContext http, User user, CancellationToken ct = default)
+    /// <summary>Opens a session and signs the browser in. <paramref name="idToken"/>: the ID token of a sign-in through MatIdentity, kept for the sign-out there.</summary>
+    public async Task<UserSession> StartSessionAsync(HttpContext http, User user, CancellationToken ct = default, string? idToken = null)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var session = new UserSession
@@ -107,6 +107,7 @@ public sealed class SignInService(MsDbContext db, ConfigStore config, TimeProvid
             LastSeenDate = now,
             IpAddress = http.Connection.RemoteIpAddress?.ToString(),
             UserAgent = Truncate(http.Request.Headers.UserAgent.ToString(), 300),
+            IdToken = string.IsNullOrEmpty(idToken) ? null : idToken,
         };
         db.UserSession.Add(session);
         user.LastLoginDate = now;
@@ -123,14 +124,19 @@ public sealed class SignInService(MsDbContext db, ConfigStore config, TimeProvid
         return session;
     }
 
-    /// <summary>Ends the session of this browser: the row is revoked, so the cookie is worthless even if somebody kept a copy.</summary>
-    public async Task EndSessionAsync(HttpContext http, CancellationToken ct = default)
+    /// <summary>
+    /// Ends the session of this browser: the row is revoked, so the cookie is worthless even if somebody kept a copy. Returns the ID token of a sign-in
+    /// through MatIdentity (null for a local one), for the sign-out there.
+    /// </summary>
+    public async Task<string?> EndSessionAsync(HttpContext http, CancellationToken ct = default)
     {
+        string? idToken = null;
         if (Guid.TryParse(http.User.FindFirstValue(AppClaims.Session), out var token))
         {
             var session = await db.UserSession.FirstOrDefaultAsync(s => s.Token == token, ct);
             if (session is not null)
             {
+                idToken = session.IdToken;
                 session.RevokedDate = clock.GetUtcNow().UtcDateTime;
                 await db.SaveChangesAsync(ct);
                 cache.InvalidateUser(session.UserId);
@@ -138,7 +144,12 @@ public sealed class SignInService(MsDbContext db, ConfigStore config, TimeProvid
         }
 
         await http.SignOutAsync(CookieScheme);
+        return idToken;
     }
+
+    /// <summary>A user that may open a session (active, with its second factor loaded); null otherwise.</summary>
+    public Task<User?> FindActiveAsync(long userId, CancellationToken ct = default)
+        => db.User.Include(u => u.Totp).FirstOrDefaultAsync(u => u.Id == userId && u.IsActive, ct);
 
     /// <summary>Ends every session of a user (password changed, user switched off).</summary>
     public async Task EndAllSessionsAsync(long userId, Guid? except = null, CancellationToken ct = default)

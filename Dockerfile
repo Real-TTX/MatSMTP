@@ -50,7 +50,7 @@ EXPOSE 2525 2025 2587 2465
 COPY --from=build /app/publish .
 USER $APP_UID
 
-# The app checks itself, so the image needs no extra tools.
+# The app asks its own /api/health (200 for ok and degraded, 503 for down: a degraded relay is not restarted), so the image needs no curl.
 HEALTHCHECK --interval=30s --timeout=8s --start-period=40s --retries=3 \
     CMD ["dotnet", "MatSmtp.dll", "--healthcheck"]
 

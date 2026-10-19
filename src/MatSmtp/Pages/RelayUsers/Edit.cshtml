@@ -14,12 +14,23 @@
     </div>
 }
 
+@if (Model.Item?.ManagedBy is { } managedBy)
+{
+    <div class="mat-alert mat-alert--info" role="status" id="managed-by">
+        @Ui.Icon("link")
+        <div class="mat-alert__body">
+            <strong>Verwaltet @Labels.ManagedBy(managedBy)</strong>
+            <span>Dieser Zugang wurde über die Schnittstelle angelegt (Kennung <span class="mat-mono">@Model.Item.ApiId</span>). @Labels.Manager(managedBy) kann ihn jederzeit überschreiben; was du hier änderst, gilt bis dahin.</span>
+        </div>
+    </div>
+}
+
 <form class="mat-form" method="post" asp-page-handler="" novalidate>
     <input type="hidden" name="Id" value="@Model.Id" />
     <ms-summary />
     <ms-card title="Zugang" icon="key">
         <div class="mat-form__grid">
-            <ms-input for="Input.UserName" label="Benutzername" required="true" autocomplete="off" hint="So meldet sich die Anwendung an (SMTP AUTH PLAIN oder LOGIN)." />
+            <ms-input for="Input.UserName" label="Benutzername" required="true" autocomplete="off" disabled="@(Model.Item?.ApiId is not null)" hint="@(Model.Item?.ApiId is not null ? "Der Name ist die Kennung in der Schnittstelle und bleibt." : "So meldet sich die Anwendung an (SMTP AUTH PLAIN oder LOGIN).")" />
             <ms-input for="Input.Description" label="Beschreibung (optional)" hint="Welche Anwendung ihn benutzt." />
             <ms-input for="Input.Password" label="@(Model.Item is null ? "Passwort" : "Neues Passwort")" type="password" autocomplete="new-password" hint="@(Model.Item is null ? "Mindestens 12 Zeichen, oder lass eines erzeugen." : "Leer lassen, um das Passwort zu behalten.")" />
             <ms-switch for="Input.IsEnabled" label="Darf sich anmelden" />

@@ -140,7 +140,7 @@ docker compose up -d
 ```
 
 Open **http://localhost:2525**: the first visit creates the administrator and then asks for the first SMTP account – the one MatSMTP sends
-through. Make it the default account, and the relay works. Health check: `/health`. An update is just `docker compose pull && docker compose up -d`.
+through. Make it the default account, and the relay works. Health check: `/api/health`. An update is just `docker compose pull && docker compose up -d`.
 
 Without Compose:
 
@@ -221,8 +221,35 @@ docker compose -f docker-compose.dev.yml up -d --build    # development stack
 | `MATSMTP__Smtp__SubmissionPort` | `2587` | Submission port inside the container |
 | `MATSMTP__Smtp__TlsPort` | `2465` | SMTPS port inside the container |
 | `TZ` | `Europe/Berlin` | Time zone of the container |
+| `MATSMTP_ADMIN_PASSWORD` | – | A headless installation: when there is no administrator, `admin` is created with this password (at least 8 characters, not `admin`; no change asked for) and the setup page is skipped. Nothing happens once an administrator exists |
+| `MATSMTP_ADMIN_EMAIL` | `admin` | The sign-in name of that administrator |
+| `MATSMTP_API_KEY` | – | The key of the management API `/api/v1` (header `X-Api-Key`). Not set: the API answers 503 |
+| `MAT_API_KEY` | – | The key of the platform endpoints `/api/*` (header `X-Api-Key`). Not set: `MATSMTP_API_KEY` serves there too |
+| `MATIDENTITY_AUTHORITY` | – | The address of MatIdentity (`https://id.example.com`). Set = sign-in through MatIdentity |
+| `MATIDENTITY_CLIENT_ID` | `matsmtp` | The client of MatSMTP in MatIdentity |
+| `MATIDENTITY_CLIENT_SECRET` | – | Its secret |
+| `MATIDENTITY_INTERNAL_URL` | – | Where MatSMTP reaches MatIdentity from inside Docker (`http://matidentity:2300`); the browser keeps using `MATIDENTITY_AUTHORITY` |
 
 Everything else – trusted networks, sign-in rules, size limit, retries, retention, pause – lives in the web interface and in `/data/config/app.json`.
+
+### Signing in without TLS
+
+SMTP AUTH sends the password. MatSMTP offers it
+
+- always over TLS: after `STARTTLS` on 25 / 587, or on 465;
+- **without TLS only to clients from the networks of *Anmeldung ohne TLS aus diesen Netzen*** (*Einstellungen → Empfang*; default: the loopback and the
+  private ranges `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fc00::/7`). Applications in the same Docker network or LAN sign in on the plain port
+  without having to trust the self-signed certificate; a client from anywhere else is not offered AUTH before `STARTTLS`, and one that sends `AUTH` anyway
+  hears `538 5.7.11` before its password is looked at;
+- from everywhere only when *Anmeldung ohne TLS von überall erlauben* is switched on.
+
+Rules and sender rewriting apply to signed-in senders as to everyone else, and a relay user with *erlaubte Absender* may only use those, in the envelope
+(`MAIL FROM`) and in the `From` of the header.
+
+**Default sender domain.** A sender without a real domain (`root`, `app@localhost`, `cron@nas`, `backup@nas.local`) gets the domain of *Standarddomain für
+Absender* (*Einstellungen → Empfang*, or `defaultSenderDomain` of the API): `app@localhost` leaves as `app@example.com`, the original stays in
+`X-MatSMTP-Original-From` and in the history. A relay user allowed to send as `app@localhost` may do so; the message leaves with the domain. Without a
+default domain such a sender stays as it is (and most providers refuse it: then set the domain, or a forced sender on the account).
 
 ### The `/data` volume
 
@@ -238,6 +265,59 @@ Everything else – trusted networks, sign-in rules, size limit, retries, retent
 ```
 
 A backup holds the database, the settings, the keys and the certificates – and, if the plan says so, the content of the queued messages.
+
+## Management API (for Mattiverse)
+
+MatSMTP is one of the engines of [Mattiverse](https://github.com/Real-TTX/Mattiverse): Mattiverse gives every app it installs its own SMTP login and
+tells it where to send. The API lives under `/api/v1`, speaks JSON (camelCase) and needs the header **`X-Api-Key`** = `MATSMTP_API_KEY`.
+Without a configured key every call answers **503**, a wrong or missing key **401**, errors are always `{"error": "..."}`; the cookie of a session counts
+for nothing here.
+
+| Method and path | Answer |
+|---|---|
+| `GET /api/v1/status` | `{"ok": true, "app": "matsmtp", "version": "1.0.42-20261019", "apiVersion": 1, "smtpPort": 2025, "smtpTls": "none", "smtpEnabled": true}` |
+| `PUT /api/v1/relay-users/{id}` | upsert of a relay user, see below: `201` (made) or `200` `{"id", "username", "password", "created"}` |
+| `GET /api/v1/relay-users` | a plain array `[{"id", "username", "displayName", "allowedSenders", "managedBy", "lastUsedUtc"}]`, never a secret |
+| `DELETE /api/v1/relay-users/{id}?managedBy=mattiverse` | `204`; `404` when there is none; `409` when another `managedBy` owns it |
+| `GET /api/v1/settings` | `{"setupCompleted": true, "defaultSenderDomain": "example.com"}` |
+| `PUT /api/v1/settings` | the same body; either field may be left out; answers like `GET`. `400` for a domain that is none |
+
+**`smtpPort` / `smtpTls`** are what an application **inside the Docker network** uses: the container port of plain SMTP (`2025`), `none` while AUTH without
+TLS is allowed from the private networks (the default, see above), else `starttls`; `tls` with the TLS port only when nothing else listens.
+
+**Relay users.** `{id}` is `[a-z0-9-]{2,64}` and is also the SMTP user name. The body:
+
+```json
+{ "displayName": "MatSplit", "allowedSenders": ["matsplit@example.com"], "managedBy": "mattiverse", "renewSecret": false }
+```
+
+- `allowedSenders`: at least one entry, each an address (`matsplit@example.com`), a pattern (`*@example.com`, `example.com`) or `*` (any sender).
+- The **password** (32 characters) is generated by MatSMTP and returned **only** when the user is made or with `"renewSecret": true`; it is stored as a hash
+  (PBKDF2), so it can never be read again. Repeating the same `PUT` changes nothing and returns no password.
+- A relay user made with a `managedBy` may only be changed or deleted with the same `managedBy` (`409` otherwise). A relay user made on the page with the
+  same name is not taken over (`409`). The pages show *verwaltet von Mattiverse* on such users; their name stays fixed.
+
+**Settings.** `setupCompleted: true` skips the setup page for an installation whose people come through MatIdentity (with an administrator the setup is done
+anyway); `defaultSenderDomain` is the default sender domain (`""` switches it off). For a headless install set `MATSMTP_ADMIN_PASSWORD` as well.
+
+## The platform contract and MatIdentity
+
+Besides its own pages MatSMTP speaks the platform contract of the Mat apps ([MatDesign docs/PLATFORM.md](https://github.com/Real-TTX/MatDesign/blob/main/docs/PLATFORM.md),
+the shared package MatPlatform, copied to `src/MatSmtp/MatPlatform/`), so Mattiverse (and Matmon) can show, watch and set it up without knowing it:
+
+| Endpoint | Access | What |
+|---|---|---|
+| `GET /api` | anonymous | the description: id `matsmtp`, the accent, the pages, tiles, settings, actions and the roles `admin` / `user` |
+| `GET /api/health` | anonymous | `ok` / `degraded` / `down` with the checks `database`, `smtp` (the receiver listens) and `accounts` (a default account, the last attempt of each); 503 only for `down`. The Docker `HEALTHCHECK` calls it |
+| `GET /api/state[/{key}]` | `X-Api-Key` = `MAT_API_KEY` (else `MATSMTP_API_KEY`) or a token of MatIdentity | the tiles: `queued`, `deferred`, `sent24h`, `failed24h`, `received24h`, `lastDelivery`, `accounts`, `accountsHealth`, `webhooksFailing` |
+| `GET` / `PUT /api/configure` | the same | the few settings: `hostname`, `defaultSenderDomain`, `trustedNetworks`, the default account (`relayHost`, `relayPort`, `relaySecurity`, `relayUsername`, `relayPassword`, `relayFrom`; made as "Standard" when there is none) and `paused`. The password is never sent back (`{"isSet": true}`) |
+| `POST /api/actions/{id}` | the same | `flushDeferred` (send what is deferred now), `retryFailed` (failed messages of the last 24 hours back into the queue), `testAccount` (connect to the default account and sign in, nothing is sent); links to the app, the messages, the queue and the accounts |
+
+**Sign-in through MatIdentity.** With `MATIDENTITY_AUTHORITY` set, a visitor who is not signed in goes straight to MatIdentity (OpenID Connect, code with
+PKCE) and comes back signed in; the redirect address is `/signin-oidc`, the signed-out address `/signout-callback-oidc`. The local sign-in (with its
+authenticator app) stays at `/Account/Login?local=1`. A person is matched by `sub`; the first sign-in creates the user; the claim `role` (`admin`, `user`)
+sets the role. An account of MatSMTP with the person's address is **not** linked by the address: the sign-in page asks once for that account's password
+(and its code), then links it; cancel or another account links nothing. Signing out ends the session at MatIdentity too.
 
 ## Development
 

@@ -3,9 +3,6 @@ using System.Net;
 using System.Security.Cryptography.X509Certificates;
 using MatSmtp.Configuration;
 using MatSmtp.Core.Relay;
-using MatSmtp.Data;
-using MatSmtp.Data.Entities;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using SmtpServer;
 using SmtpServer.Authentication;
@@ -21,7 +18,8 @@ public sealed record ListenerState(bool Running, IReadOnlyList<string> Endpoints
 
 /// <summary>
 /// The SMTP side of the relay: listens on the ports of the settings (plain with STARTTLS, submission, TLS from the start), lets applications in by their network
-/// or by a relay user (AUTH PLAIN / LOGIN), and hands every message to <see cref="RelayService"/>. A change of the settings restarts it; the certificate is asked
+/// or by a relay user (AUTH PLAIN / LOGIN: over TLS, or without it from the networks of <see cref="SmtpConfig.PlainAuthNetworks"/>), and hands every message to
+/// <see cref="RelayService"/>. A change of the settings restarts it; the certificate is asked
 /// for per connection, so a new one needs no restart.
 /// </summary>
 public sealed class SmtpListener(ConfigStore config, IServiceScopeFactory scopes, CertificateService certificates, IMemoryCache cache, ILogger<SmtpListener> logger) : BackgroundService
@@ -137,7 +135,8 @@ public sealed class SmtpListener(ConfigStore config, IServiceScopeFactory scopes
                 .Endpoint(new IPEndPoint(IPAddress.Any, e.Port))
                 .IsSecure(e.Tls)
                 .Certificate(certificate)
-                .AllowUnsecureAuthentication(smtp.AllowPlainAuth)
+                // Per session, not per port: AUTH without TLS only from the networks of PlainAuthNetworks (see AuthWithoutTls).
+                .AllowUnsecureAuthentication(true)
                 .AuthenticationRequired(false)
                 .SessionTimeout(TimeSpan.FromMinutes(5)));
         }
@@ -146,9 +145,16 @@ public sealed class SmtpListener(ConfigStore config, IServiceScopeFactory scopes
         services.Add(new MessageStore(scopes));
         services.Add(new MailboxFilter(config));
         services.Add(new UserAuthenticator(scopes, cache, logger));
+        services.Add(new CommandFactory(config));
         var server = new SmtpServer.SmtpServer(builder.Build(), services);
         server.SessionCreated += (_, e) => e.Context.CommandExecuting += (_, c) =>
         {
+            if (c.Command is AuthCommand && !AuthWithoutTls(config.Current.Smtp, c.Context))
+            {
+                // The client did not ask EHLO what is offered: refused before the password is checked (it may have crossed the network in clear already).
+                throw new SmtpResponseException(new SmtpResponse((SmtpReplyCode)538, "5.7.11 Erst STARTTLS, dann anmelden: ohne TLS geht AUTH nur aus den freigegebenen Netzen."));
+            }
+
             if (c.Command is EhloCommand ehlo)
             {
                 e.Context.Properties[HeloKey] = ehlo.DomainOrAddress;
@@ -159,6 +165,31 @@ public sealed class SmtpListener(ConfigStore config, IServiceScopeFactory scopes
             }
         };
         return server;
+    }
+
+    /// <summary>
+    /// Whether this session may sign in (AUTH): always over TLS (STARTTLS or the TLS port); without TLS only from the networks of
+    /// <see cref="SmtpConfig.PlainAuthNetworks"/> (the Docker network, the LAN) or from everywhere with <see cref="SmtpConfig.AllowPlainAuth"/>.
+    /// </summary>
+    public static bool PlainAuthAllowed(SmtpConfig smtp, IPAddress? client)
+        => smtp.AllowPlainAuth || IpNetworks.Contains(smtp.PlainAuthNetworks, client);
+
+    private static bool AuthWithoutTls(SmtpConfig smtp, ISessionContext context)
+        => (context.Pipe?.IsSecure ?? false) || PlainAuthAllowed(smtp, Session(context).ClientIp);
+
+    /// <summary>EHLO offers AUTH only to a session that may use it (<see cref="AuthWithoutTls"/>): a client never sends a password it should not.</summary>
+    private sealed class CommandFactory(ConfigStore config) : SmtpCommandFactory
+    {
+        public override SmtpCommand CreateEhlo(string domainOrAddress) => new Ehlo(domainOrAddress, config);
+
+        private sealed class Ehlo(string domainOrAddress, ConfigStore config) : EhloCommand(domainOrAddress)
+        {
+            protected override IEnumerable<string> GetExtensions(ISessionContext context)
+            {
+                var auth = AuthWithoutTls(config.Current.Smtp, context);
+                return base.GetExtensions(context).Where(e => auth || !e.StartsWith("AUTH", StringComparison.Ordinal));
+            }
+        }
     }
 
     /// <summary>What the session knows about the client, for the rules and the log.</summary>
@@ -211,18 +242,14 @@ public sealed class SmtpListener(ConfigStore config, IServiceScopeFactory scopes
             }
 
             using var scope = scopes.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<MsDbContext>();
             var name = (user ?? "").Trim();
-            var account = await db.RelayUser.FirstOrDefaultAsync(u => u.UserName == name, cancellationToken);
-            if (account is null || !account.IsEnabled || !Core.Security.PasswordHasher.Verify(password ?? "", account.PasswordHash))
+            if (!await scope.ServiceProvider.GetRequiredService<RelayUserService>().AuthenticateAsync(name, password, cancellationToken))
             {
                 cache.Set(key, failures + 1, TimeSpan.FromMinutes(15));
                 logger.LogWarning("SMTP AUTH failed for {User} from {Ip}.", name, ip);
                 return false;
             }
 
-            account.LastUsedDate = DateTime.UtcNow;
-            await db.SaveChangesAsync(cancellationToken);
             return true;
         }
     }

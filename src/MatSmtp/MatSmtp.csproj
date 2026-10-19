@@ -25,6 +25,9 @@
     <PackageReference Include="QRCoder" Version="1.*" />
     <!-- SMB client: backups on a NAS -->
     <PackageReference Include="SMBLibrary" Version="1.5.7.1" />
+    <!-- The platform contract (MatPlatform/, a copy from MatDesign): the sign-in through MatIdentity and its tokens on /api -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.13" />
   </ItemGroup>
 
   <ItemGroup>

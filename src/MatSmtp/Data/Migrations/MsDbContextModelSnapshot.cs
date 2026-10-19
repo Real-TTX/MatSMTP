@@ -421,6 +421,9 @@ namespace MatSmtp.Data.Migrations
                     b.Property<string>("AllowedSenders")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ApiId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreateDate")
                         .HasColumnType("TEXT");
 
@@ -434,6 +437,9 @@ namespace MatSmtp.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime?>("LastUsedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ManagedBy")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("PasswordHash")
@@ -455,6 +461,10 @@ namespace MatSmtp.Data.Migrations
                         .UseCollation("NOCASE");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ApiId")
+                        .IsUnique()
+                        .HasFilter("\"UpdateState\" <> 0 AND \"ApiId\" IS NOT NULL");
 
                     b.HasIndex("UserName")
                         .IsUnique()
@@ -712,6 +722,9 @@ namespace MatSmtp.Data.Migrations
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
 
+                    b.Property<string>("ExternalSubject")
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("FailedLogins")
                         .HasColumnType("INTEGER");
 
@@ -755,6 +768,10 @@ namespace MatSmtp.Data.Migrations
                     b.HasIndex("Email")
                         .IsUnique()
                         .HasFilter("\"UpdateState\" <> 0");
+
+                    b.HasIndex("ExternalSubject")
+                        .IsUnique()
+                        .HasFilter("\"ExternalSubject\" IS NOT NULL");
 
                     b.ToTable("User");
                 });
@@ -807,6 +824,9 @@ namespace MatSmtp.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("ExpiresDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("IdToken")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("IpAddress")

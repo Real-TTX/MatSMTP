@@ -33,6 +33,10 @@ public sealed class SmtpModel(ConfigStore config, SmtpListener listener, Certifi
 
         public bool AllowPlainAuth { get; set; }
 
+        public string? PlainAuthNetworks { get; set; }
+
+        public string? DefaultSenderDomain { get; set; }
+
         [Range(1, 500, ErrorMessage = "1 bis 500 MB.")]
         public int MaxMessageSizeMb { get; set; } = 25;
     }
@@ -62,6 +66,7 @@ public sealed class SmtpModel(ConfigStore config, SmtpListener listener, Certifi
         {
             Enabled = s.Enabled, Hostname = s.Hostname, Port = s.Port, SubmissionPort = s.SubmissionPort, TlsPort = s.TlsPort, RequireAuth = s.RequireAuth,
             TrustedNetworks = s.TrustedNetworks.Replace(", ", "\n"), AllowPlainAuth = s.AllowPlainAuth, MaxMessageSizeMb = s.MaxMessageSizeMb,
+            PlainAuthNetworks = s.PlainAuthNetworks.Replace(", ", "\n"), DefaultSenderDomain = s.DefaultSenderDomain,
         };
     }
 
@@ -71,6 +76,17 @@ public sealed class SmtpModel(ConfigStore config, SmtpListener listener, Certifi
         if (IpNetworks.Problem(Input.TrustedNetworks) is { } problem)
         {
             ModelState.AddModelError("Input.TrustedNetworks", problem);
+        }
+
+        if (IpNetworks.Problem(Input.PlainAuthNetworks) is { } plainProblem)
+        {
+            ModelState.AddModelError("Input.PlainAuthNetworks", plainProblem);
+        }
+
+        var domain = (Input.DefaultSenderDomain ?? "").Trim().TrimStart('@').ToLowerInvariant();
+        if (!RelaySettingsService.IsValidDomain(domain))
+        {
+            ModelState.AddModelError("Input.DefaultSenderDomain", "Eine Domain wie example.com, oder leer.");
         }
 
         var ports = new[] { Input.Port, Input.SubmissionPort, Input.TlsPort }.Where(p => p > 0).ToList();
@@ -100,6 +116,12 @@ public sealed class SmtpModel(ConfigStore config, SmtpListener listener, Certifi
             }
 
             s.AllowPlainAuth = Input.AllowPlainAuth;
+            if (!Input.AllowPlainAuth)
+            {
+                s.PlainAuthNetworks = string.Join(", ", IpNetworks.Parse(Input.PlainAuthNetworks).Select(n => n.ToString()));
+            }
+
+            s.DefaultSenderDomain = domain;
             s.MaxMessageSizeMb = Input.MaxMessageSizeMb;
         });
 

@@ -33,6 +33,7 @@
             <ms-switch for="Input.Enabled" label="Mails annehmen" full="true" hint="Abgeschaltet nimmt MatSMTP keine Verbindungen an; die Warteschlange wird weiter versendet." />
             <ms-input for="Input.Hostname" label="Servername" required="true" hint="Steht im Gruß des Servers, in der Received-Kopfzeile und im selbst signierten Zertifikat." />
             <ms-input for="Input.MaxMessageSizeMb" label="Größte Nachricht (MB)" type="number" />
+            <ms-input for="Input.DefaultSenderDomain" label="Standarddomain für Absender (optional)" full="true" placeholder="example.com" hint="Ein Absender ohne echte Domain (root, app@@localhost, cron@@nas) bekommt diese: root@@example.com. Leer: Absender bleiben, wie sie sind." />
             <ms-input for="Input.Port" label="Port SMTP (mit STARTTLS)" type="number" disabled="@Model.PortFixed("Port")" hint="@(Model.PortFixed("Port") ? "Durch die Umgebung festgelegt (MATSMTP__Smtp__Port)." : "0 = aus. Im Container 2025, außen meist 25.")" />
             <ms-input for="Input.SubmissionPort" label="Port Submission (mit STARTTLS)" type="number" disabled="@Model.PortFixed("SubmissionPort")" hint="@(Model.PortFixed("SubmissionPort") ? "Durch die Umgebung festgelegt." : "0 = aus. Im Container 2587, außen meist 587.")" />
             <ms-input for="Input.TlsPort" label="Port TLS (SMTPS)" type="number" disabled="@Model.PortFixed("TlsPort")" hint="@(Model.PortFixed("TlsPort") ? "Durch die Umgebung festgelegt." : "0 = aus. Im Container 2465, außen meist 465.")" />
@@ -43,7 +44,8 @@
         <div class="mat-form__grid">
             <ms-switch for="Input.RequireAuth" label="Anmeldung immer verlangen" full="true" hint="Dann muss jede Anwendung sich mit einem Zugang anmelden, auch aus dem eigenen Netz." />
             <ms-textarea for="Input.TrustedNetworks" label="Vertrauenswürdige Netze (ohne Anmeldung)" rows="4" full="true" show-if="Input.RequireAuth" show-value="false" hint="Ein Netz pro Zeile, zum Beispiel 192.168.0.0/16. Clients daraus senden ohne Anmeldung. Leer: niemand. Vorsicht mit 0.0.0.0/0: das wäre ein offenes Relay." />
-            <ms-switch for="Input.AllowPlainAuth" label="Anmeldung auch ohne TLS erlauben" full="true" hint="Das Passwort geht dann im Klartext über das Netz: nur in einem Netz, dem du vertraust." />
+            <ms-textarea for="Input.PlainAuthNetworks" label="Anmeldung ohne TLS aus diesen Netzen" rows="4" full="true" show-if="Input.AllowPlainAuth" show-value="false" hint="Ein Netz pro Zeile. Anwendungen daraus (das Docker-Netz, das LAN) dürfen sich ohne STARTTLS anmelden, weil sie einem selbst signierten Zertifikat meist nicht trauen. Von überall sonst nur mit TLS. Leer: niemand." />
+            <ms-switch for="Input.AllowPlainAuth" label="Anmeldung ohne TLS von überall erlauben" full="true" hint="Das Passwort geht dann auch über das Internet im Klartext: nur, wenn jedes Netz dazwischen vertrauenswürdig ist." />
         </div>
     </ms-card>
 
@@ -101,6 +103,7 @@
     <dl class="mat-kv">
         <dt>SMTP-Server</dt><dd>Adresse des Docker-Hosts (oder <span class="mat-mono">@Model.Input.Hostname</span>, wenn der Name auf ihn zeigt)</dd>
         <dt>Port</dt><dd>25 oder 587 mit STARTTLS, 465 mit TLS (so in der docker-compose.yml nach außen gegeben; im Container @Model.Input.Port, @Model.Input.SubmissionPort und @Model.Input.TlsPort)</dd>
-        <dt>Anmeldung</dt><dd>@(Model.Input.RequireAuth ? "immer mit einem Zugang" : "aus vertrauenswürdigen Netzen ohne, sonst mit einem Zugang") (<a href="/RelayUsers">Zugänge</a>)</dd>
+        <dt>Anmeldung</dt><dd>@(Model.Input.RequireAuth ? "immer mit einem Zugang" : "aus vertrauenswürdigen Netzen ohne, sonst mit einem Zugang") (<a href="/RelayUsers">Zugänge</a>); ohne TLS nur aus den freigegebenen Netzen</dd>
+        <dt>Im Docker-Netz</dt><dd>Anwendungen im selben Netz erreichen MatSMTP unter dem Namen des Containers auf Port @Model.Input.Port, ohne TLS, mit ihrem Zugang</dd>
     </dl>
 </ms-card>

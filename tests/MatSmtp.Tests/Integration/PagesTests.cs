@@ -101,7 +101,7 @@ public sealed class PagesTests : IClassFixture<AppFixture>
         await _app.CreateUserAsync("normal@example.test", "Normal-Passwort-2026", UserRole.User);
 
         using var anonymous = _app.NewClient();
-        foreach (var url in new[] { "/", "/Messages", "/Messages/Queue", "/Rules", "/Accounts", "/Admin/Users", "/messages/1/eml", "/api/status", "/RuleTest" })
+        foreach (var url in new[] { "/", "/Messages", "/Messages/Queue", "/Rules", "/Accounts", "/Admin/Users", "/messages/1/eml", "/api/state", "/RuleTest" })
         {
             var status = (await anonymous.GetAsync(url)).StatusCode;
             Assert.True(status is HttpStatusCode.Redirect or HttpStatusCode.Unauthorized, $"{url} answered {(int)status} to somebody who is not signed in");

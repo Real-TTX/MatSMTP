@@ -1,17 +1,15 @@
 using System.ComponentModel.DataAnnotations;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Account;
 
 /// <summary>The first start: creates the first administrator. The page exists only while there is none.</summary>
 [AllowAnonymous]
-public sealed class SetupModel(MsDbContext db, UserService users, SignInService signIn, SetupState setup, ActivityLogger log) : PageModelBase
+public sealed class SetupModel(UserService users, SignInService signIn, SetupState setup, ActivityLogger log) : PageModelBase
 {
     public sealed class InputModel
     {
@@ -39,13 +37,13 @@ public sealed class SetupModel(MsDbContext db, UserService users, SignInService 
     public async Task<IActionResult> OnGetAsync()
     {
         ViewData["Title"] = "Einrichtung";
-        return await db.User.AnyAsync(u => u.Role == UserRole.Admin) ? RedirectToPage("/Account/Login") : Page();
+        return await setup.IsDoneAsync(HttpContext.RequestServices, HttpContext.RequestAborted) ? RedirectToPage("/Account/Login") : Page();
     }
 
     public async Task<IActionResult> OnPostAsync()
     {
         ViewData["Title"] = "Einrichtung";
-        if (await db.User.AnyAsync(u => u.Role == UserRole.Admin))
+        if (await setup.IsDoneAsync(HttpContext.RequestServices, HttpContext.RequestAborted))
         {
             return RedirectToPage("/Account/Login");
         }

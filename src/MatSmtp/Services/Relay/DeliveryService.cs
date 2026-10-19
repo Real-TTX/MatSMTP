@@ -306,6 +306,23 @@ public sealed class DeliveryService(MsDbContext db, ConfigStore config, SpoolSto
         await db.SaveChangesAsync(ct);
         return count;
     }
+
+    /// <summary>The failed messages received since <paramref name="since"/> go back into the queue (their content still there), with fresh attempts.</summary>
+    public async Task<int> RetryFailedAsync(DateTime since, CancellationToken ct)
+    {
+        var ids = await db.Message.Where(m => m.Status == MessageStatus.Failed && m.Action == RuleAction.Relay && m.ReceivedDate >= since).Select(m => m.Id).ToListAsync(ct);
+        return ids.Count == 0 ? 0 : await RetryAsync(ids, ct);
+    }
+
+    /// <summary>Every deferred message and every one that waits for the limit of its account is tried now instead of at its next attempt.</summary>
+    public async Task<int> FlushDeferredAsync(CancellationToken ct)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        var ids = await db.Message
+            .Where(m => m.Action == RuleAction.Relay && (m.Status == MessageStatus.Deferred || (m.Status == MessageStatus.Queued && m.NextAttemptDate > now)))
+            .Select(m => m.Id).ToListAsync(ct);
+        return ids.Count == 0 ? 0 : await RetryAsync(ids, ct);
+    }
 }
 
 /// <summary>Runs the spooler and the webhooks: wakes up when a message comes in and at least every five seconds.</summary>

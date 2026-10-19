@@ -1,17 +1,14 @@
 using System.ComponentModel.DataAnnotations;
 using MatSmtp.Configuration;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Relay;
-using MatSmtp.UiKit;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Accounts;
 
 /// <summary>One SMTP account: server, sign-in, a forced sender, the limits, default or not; a check of the connection and a test message.</summary>
-public sealed class EditModel(MsDbContext db, SecretProtector secrets, DeliveryService delivery, ActivityLogger log) : PageModelBase
+public sealed class EditModel(AccountService accounts, SecretProtector secrets, DeliveryService delivery, ActivityLogger log) : PageModelBase
 {
     public sealed class InputModel
     {
@@ -90,7 +87,7 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, DeliveryS
         }
         else
         {
-            Input.IsDefault = !await db.SmtpAccount.AnyAsync();
+            Input.IsDefault = !await accounts.AnyAsync(HttpContext.RequestAborted);
         }
 
         return Page();
@@ -113,20 +110,7 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, DeliveryS
             return Page();
         }
 
-        var account = Account is null ? new SmtpAccount() : await db.SmtpAccount.FirstAsync(a => a.Id == Account.Id);
-        Apply(account);
-        if (Account is null)
-        {
-            db.SmtpAccount.Add(account);
-        }
-
-        if (account.IsDefault)
-        {
-            // There is one default account: the new one takes it over.
-            await db.SmtpAccount.Where(a => a.Id != account.Id && a.IsDefault).ExecuteUpdateAsync(s => s.SetProperty(a => a.IsDefault, false));
-        }
-
-        await db.SaveChangesAsync();
+        var account = await accounts.SaveAsync(Account?.Id, Apply, HttpContext.RequestAborted);
         await log.LogAsync(Account is null ? "SMTP-Konto angelegt" : "SMTP-Konto geändert", nameof(SmtpAccount), account.Id, $"{account.Name} ({account.Host}:{account.Port})");
         Flash("Das Konto ist gespeichert.");
         return RedirectToPage(new { id = account.Id });
@@ -174,14 +158,12 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, DeliveryS
 
     public async Task<IActionResult> OnPostDeleteAsync()
     {
-        var account = await db.SmtpAccount.FirstOrDefaultAsync(a => a.Id == Id);
+        var account = Id is { } id ? await accounts.DeleteAsync(id, HttpContext.RequestAborted) : null;
         if (account is null)
         {
             return RedirectToPage("/Accounts/Index");
         }
 
-        db.SmtpAccount.Remove(account);
-        await db.SaveChangesAsync();
         await log.LogAsync("SMTP-Konto gelöscht", nameof(SmtpAccount), account.Id, account.Name);
         Flash("Das Konto ist gelöscht. Regeln, die es nannten, senden jetzt über das Standardkonto.");
         return RedirectToPage("/Accounts/Index");
@@ -221,13 +203,13 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, DeliveryS
     {
         if (Id is { } id)
         {
-            Account = await db.SmtpAccount.AsNoTracking().FirstOrDefaultAsync(a => a.Id == id);
+            Account = await accounts.FindAsync(id, HttpContext.RequestAborted);
             if (Account is null)
             {
                 return false;
             }
 
-            RuleCount = await db.Rule.CountAsync(r => r.AccountId == id);
+            RuleCount = await accounts.CountRulesAsync(id, HttpContext.RequestAborted);
         }
 
         var title = Account?.Name ?? "Neues SMTP-Konto";

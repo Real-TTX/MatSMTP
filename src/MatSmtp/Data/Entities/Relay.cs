@@ -72,6 +72,12 @@ public class RelayUser : AuditedEntity, ISoftDeletable
 
     public DateTime? LastUsedDate { get; set; }
 
+    /// <summary>The id of the relay user in the management API (<c>PUT /api/v1/relay-users/{id}</c>, <c>[a-z0-9-]{2,64}</c>); null: made on the page.</summary>
+    public string? ApiId { get; set; }
+
+    /// <summary>Who manages it through the API (<c>mattiverse</c>): only the same caller may change or delete it there; the pages show a badge.</summary>
+    public string? ManagedBy { get; set; }
+
     public UpdateState UpdateState { get; set; } = UpdateState.Created;
 }
 

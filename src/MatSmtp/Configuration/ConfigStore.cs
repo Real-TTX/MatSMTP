@@ -112,7 +112,10 @@ public sealed class ConfigStore
             }
         }
 
-        copy.Server = fromFile.Server;
+        // Only what the environment set goes back to the value of the file; what a page changed (the public address on Sicherheit) is kept.
+        if (Env("Server__PublicUrl") is { Length: > 0 }) { copy.Server.PublicUrl = fromFile.Server.PublicUrl; }
+        if (Env("Server__TimeZone") is { Length: > 0 }) { copy.Server.TimeZone = fromFile.Server.TimeZone; }
+        if (bool.TryParse(Env("Server__ForceSecureCookie"), out _)) { copy.Server.ForceSecureCookie = fromFile.Server.ForceSecureCookie; }
         if (Env("Smtp__Port") is not null) { copy.Smtp.Port = fromFile.Smtp.Port; }
         if (Env("Smtp__SubmissionPort") is not null) { copy.Smtp.SubmissionPort = fromFile.Smtp.SubmissionPort; }
         if (Env("Smtp__TlsPort") is not null) { copy.Smtp.TlsPort = fromFile.Smtp.TlsPort; }

@@ -17,6 +17,13 @@ services:
     environment:
       TZ: Europe/Berlin
       # MATSMTP__Server__PublicUrl: https://smtp.example.de   # for share links
+      # MATSMTP_ADMIN_PASSWORD: ""           # headless: creates the administrator "admin" with this password (8+ characters), no setup page
+      # MATSMTP_API_KEY: ""                  # the key of the management API /api/v1 (Mattiverse sets it)
+      # MAT_API_KEY: ""                      # the key of /api/* (platform contract; without it MATSMTP_API_KEY serves there too)
+      # MATIDENTITY_AUTHORITY: ""            # https://id.example.com: sign-in through MatIdentity
+      # MATIDENTITY_CLIENT_ID: "matsmtp"
+      # MATIDENTITY_CLIENT_SECRET: ""
+      # MATIDENTITY_INTERNAL_URL: ""         # http://matidentity:2300 inside Docker
     volumes:
       - matsmtp-data:/data
       # Backups to a NAS go over SMB from the app (Einstellungen > Backup > Ziele); a mounted folder works as well:

@@ -23,7 +23,7 @@ public sealed record RuleTestResult(RuleDecision Decision, string? AccountName, 
 /// Takes a received message: asks the rules what to do (<see cref="RuleEngine"/>), rewrites the sender, keeps the content in the spool folder, writes the message
 /// with its first history into the database and wakes the spooler. A rule that rejects answers the application at once (550), nothing is kept but the log line.
 /// </summary>
-public sealed class RelayService(MsDbContext db, ConfigStore config, SpoolStore spool, SpoolSignal signal, TimeProvider clock, ILogger<RelayService> logger)
+public sealed class RelayService(MsDbContext db, ConfigStore config, SpoolStore spool, SpoolSignal signal, RelayUserService relayUsers, TimeProvider clock, ILogger<RelayService> logger)
 {
     /// <summary>The enabled rules in their order, as the engine wants them.</summary>
     public async Task<List<RuleSpec>> LoadRulesAsync(CancellationToken ct = default)
@@ -70,7 +70,18 @@ public sealed class RelayService(MsDbContext db, ConfigStore config, SpoolStore 
             return new ReceiveResult(false, 554, "5.6.0 Die Nachricht ist kein gültiges E-Mail-Format.");
         }
 
+        // A sender without a real domain (root, app@localhost) gets the default domain first: the relay user and the rules see the address that leaves.
+        var givenFrom = envelopeFrom;
         var headerFrom = mime.From.Mailboxes.FirstOrDefault();
+        var givenHeaderFrom = headerFrom?.Address;
+        var defaultDomain = config.Current.Smtp.DefaultSenderDomain;
+        envelopeFrom = SenderRewrite.CompleteDomain(envelopeFrom, defaultDomain);
+        if (headerFrom is not null)
+        {
+            headerFrom.Address = SenderRewrite.CompleteDomain(headerFrom.Address, defaultDomain);
+        }
+
+        var completed = envelopeFrom != givenFrom || headerFrom?.Address != givenHeaderFrom;
         var facts = new MessageFacts
         {
             EnvelopeFrom = envelopeFrom,
@@ -99,17 +110,18 @@ public sealed class RelayService(MsDbContext db, ConfigStore config, SpoolStore 
             SizeBytes = raw.Length,
         };
 
-        // A relay user may be limited to some senders: an application that signed in must not send as anybody.
-        if (session.AuthUser is not null)
+        if (completed)
         {
-            var user = await db.RelayUser.AsNoTracking().FirstOrDefaultAsync(u => u.UserName == session.AuthUser, ct);
-            if (user is not null && !string.IsNullOrWhiteSpace(user.AllowedSenders)
-                && !AddressPattern.MatchesAny(user.AllowedSenders, envelopeFrom) && !AddressPattern.MatchesAny(user.AllowedSenders, headerFrom?.Address))
-            {
-                var text = $"Der Zugang {user.UserName} darf nicht als {(envelopeFrom.Length > 0 ? envelopeFrom : headerFrom?.Address)} senden.";
-                await RecordRefusedAsync(message, MessageStatus.Rejected, text, null, ct);
-                return new ReceiveResult(false, 550, "5.7.1 " + text);
-            }
+            message.OriginalFrom = Cut(givenHeaderFrom ?? givenFrom, 300);
+            mime.Headers.Replace("X-MatSMTP-Original-From", givenHeaderFrom ?? givenFrom);
+        }
+
+        // A relay user may be limited to some senders: an application that signed in must not send as anybody, neither in the envelope nor in the header.
+        if (session.AuthUser is not null && await relayUsers.DisallowedSenderAsync(session.AuthUser, envelopeFrom, headerFrom?.Address, ct, givenFrom, givenHeaderFrom) is { } refused)
+        {
+            var text = $"Der Zugang {session.AuthUser} darf nicht als {refused} senden.";
+            await RecordRefusedAsync(message, MessageStatus.Rejected, text, null, ct);
+            return new ReceiveResult(false, 550, "5.7.1 " + text);
         }
 
         var decision = RuleEngine.Evaluate(await LoadRulesAsync(ct), facts);
@@ -149,6 +161,10 @@ public sealed class RelayService(MsDbContext db, ConfigStore config, SpoolStore 
         message.Status = MessageStatus.Queued;
         message.Events.Add(Event(now, EventLevel.Info, $"Empfangen von {message.ClientIp ?? "unbekannt"}{(session.AuthUser is null ? "" : $" (Zugang {session.AuthUser})")}{(session.IsTls ? " über TLS" : "")}, {Fmt.FileSize(bytes.Length)}, {Ui.CountNoun(recipients.Count, "Empfänger")}."));
         message.Events.Add(Event(now, EventLevel.Info, Describe(decision)));
+        if (completed)
+        {
+            message.Events.Add(Event(now, EventLevel.Info, $"Absender um die Standarddomain ergänzt: {givenHeaderFrom ?? givenFrom} → {headerFrom?.Address ?? envelopeFrom}."));
+        }
 
         if (decision.WebhookIds.Count > 0)
         {
@@ -245,7 +261,7 @@ public sealed class RelayService(MsDbContext db, ConfigStore config, SpoolStore 
             return;
         }
 
-        var before = mime.From.Mailboxes.FirstOrDefault()?.Address ?? message.EnvelopeFrom;
+        var before = message.OriginalFrom ?? mime.From.Mailboxes.FirstOrDefault()?.Address ?? message.EnvelopeFrom;
         message.OriginalFrom = before;
         message.EnvelopeFrom = decision.EnvelopeFrom;
         if (decision.HeaderFrom is not null || decision.HeaderFromName is not null)

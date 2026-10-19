@@ -33,6 +33,9 @@ public class User : AuditedEntity, ISoftDeletable
 
     public DateTime? PasswordChangedDate { get; set; }
 
+    /// <summary>The person in MatIdentity (claim <c>sub</c>) this user is linked with; null: only the local sign-in.</summary>
+    public string? ExternalSubject { get; set; }
+
     public UpdateState UpdateState { get; set; } = UpdateState.Created;
 
     public UserTotp? Totp { get; set; }
@@ -88,4 +91,7 @@ public class UserSession : AuditedEntity
     public string? UserAgent { get; set; }
 
     public DateTime? RevokedDate { get; set; }
+
+    /// <summary>The ID token of a sign-in through MatIdentity: the hint for the sign-out there. Null for a local sign-in.</summary>
+    public string? IdToken { get; set; }
 }

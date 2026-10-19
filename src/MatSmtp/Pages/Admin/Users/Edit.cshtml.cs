@@ -20,7 +20,6 @@ public sealed class EditModel(MsDbContext db, UserService users, SignInService s
         public string DisplayName { get; set; } = "";
 
         [Required(ErrorMessage = "Bitte gib die E-Mail-Adresse ein.")]
-        [EmailAddress(ErrorMessage = "Das ist keine gültige E-Mail-Adresse.")]
         [Display(Name = "E-Mail-Adresse")]
         public string Email { get; set; } = "";
 
@@ -76,6 +75,13 @@ public sealed class EditModel(MsDbContext db, UserService users, SignInService s
         }
 
         var email = SignInService.NormalizeEmail(Input.Email);
+
+        // An address, or the name the account already has (the administrator "admin" of a headless installation keeps it).
+        if (ModelState.IsValid && !new EmailAddressAttribute().IsValid(email) && email != SignInService.NormalizeEmail(Account?.Email))
+        {
+            ModelState.AddModelError("Input.Email", "Das ist keine gültige E-Mail-Adresse.");
+        }
+
         if (ModelState.IsValid && await users.EmailTakenAsync(email, Id))
         {
             ModelState.AddModelError("Input.Email", "Zu dieser E-Mail-Adresse gibt es schon ein Konto.");
