@@ -1,18 +1,17 @@
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using MatSmtp.Core.Relay;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
+using MatSmtp.Services.Relay;
 using MatSmtp.UiKit;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Rules;
 
 /// <summary>One rule: its conditions (sender, recipient, network, sign-in, subject), its decision and its changes (rewrite, webhook, blind copy).</summary>
-public sealed class EditModel(MsDbContext db, ActivityLogger log) : PageModelBase
+public sealed class EditModel(RuleService rules, AccountService accounts, WebhookAdminService webhooks, ActivityLogger log) : PageModelBase
 {
     public sealed class InputModel
     {
@@ -78,7 +77,7 @@ public sealed class EditModel(MsDbContext db, ActivityLogger log) : PageModelBas
             return NotFound();
         }
 
-        var source = Item ?? (copy is { } c ? await db.Rule.AsNoTracking().FirstOrDefaultAsync(r => r.Id == c) : null);
+        var source = Item ?? (copy is { } c ? await rules.FindAsync(c, HttpContext.RequestAborted) : null);
         if (source is { } r)
         {
             Input = new InputModel
@@ -126,7 +125,14 @@ public sealed class EditModel(MsDbContext db, ActivityLogger log) : PageModelBas
             return Page();
         }
 
-        var rule = Item is null ? new Rule() : await db.Rule.FirstAsync(r => r.Id == Item.Id);
+        var rule = await rules.SaveAsync(Item?.Id, Apply, HttpContext.RequestAborted);
+        await log.LogAsync(Item is null ? "Regel angelegt" : "Regel geändert", nameof(Rule), rule.Id, rule.Name);
+        Flash("Die Regel ist gespeichert.");
+        return RedirectToPage("/Rules/Index");
+    }
+
+    private void Apply(Rule rule)
+    {
         rule.Name = Input.Name.Trim();
         rule.Description = Clean(Input.Description);
         rule.IsEnabled = Input.IsEnabled;
@@ -146,31 +152,16 @@ public sealed class EditModel(MsDbContext db, ActivityLogger log) : PageModelBas
         rule.ReplyToOriginal = Input.ReplyToOriginal;
         rule.AddBcc = Input.Action is RuleAction.Relay or RuleAction.Continue ? CleanList(Input.AddBcc) : null;
         rule.RejectMessage = Input.Action == RuleAction.Reject ? Clean(Input.RejectMessage) : null;
-        if (Item is null)
-        {
-            rule.Position = (await db.Rule.MaxAsync(r => (int?)r.Position) ?? 0) + 10;
-            db.Rule.Add(rule);
-        }
-
-        await db.SaveChangesAsync();
-        await log.LogAsync(Item is null ? "Regel angelegt" : "Regel geändert", nameof(Rule), rule.Id, rule.Name);
-        Flash("Die Regel ist gespeichert.");
-        return RedirectToPage("/Rules/Index");
     }
 
     public async Task<IActionResult> OnPostDeleteAsync()
     {
-        var rule = await db.Rule.FirstOrDefaultAsync(r => r.Id == Id);
+        var rule = Id is { } id ? await rules.DeleteAsync(id, HttpContext.RequestAborted) : null;
         if (rule is null)
         {
             return RedirectToPage("/Rules/Index");
         }
 
-        db.Rule.Remove(rule);
-        await db.SaveChangesAsync();
-        var rest = await db.Rule.OrderBy(r => r.Position).ThenBy(r => r.Id).ToListAsync();
-        IndexModel.Renumber(rest);
-        await db.SaveChangesAsync();
         await log.LogAsync("Regel gelöscht", nameof(Rule), rule.Id, rule.Name);
         Flash("Die Regel ist gelöscht.");
         return RedirectToPage("/Rules/Index");
@@ -193,18 +184,18 @@ public sealed class EditModel(MsDbContext db, ActivityLogger log) : PageModelBas
     {
         if (Id is { } id)
         {
-            Item = await db.Rule.AsNoTracking().FirstOrDefaultAsync(r => r.Id == id);
+            Item = await rules.FindAsync(id, HttpContext.RequestAborted);
             if (Item is null)
             {
                 return false;
             }
         }
 
-        Accounts = [.. (await db.SmtpAccount.AsNoTracking().OrderBy(a => a.Name).ToListAsync())
+        Accounts = [.. (await accounts.AllAsync(HttpContext.RequestAborted))
             .Select(a => new SelectListItem(a.Name + (a.IsDefault ? " (Standard)" : "") + (a.IsEnabled ? "" : " (abgeschaltet)"), a.Id.ToString(CultureInfo.InvariantCulture)))];
-        Webhooks = [.. (await db.Webhook.AsNoTracking().OrderBy(w => w.Name).ToListAsync())
+        Webhooks = [.. (await webhooks.AllAsync(HttpContext.RequestAborted))
             .Select(w => new SelectListItem(w.Name + (w.IsEnabled ? "" : " (abgeschaltet)"), w.Id.ToString(CultureInfo.InvariantCulture)))];
-        RelayUsers = [.. (await db.RelayUser.AsNoTracking().OrderBy(u => u.UserName).ToListAsync())
+        RelayUsers = [.. (await rules.RelayUsersAsync(HttpContext.RequestAborted))
             .Select(u => new SelectListItem(u.UserName, u.Id.ToString(CultureInfo.InvariantCulture)))];
 
         var title = Item?.Name ?? "Neue Regel";

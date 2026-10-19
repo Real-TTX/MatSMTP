@@ -1,17 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using MatSmtp.Configuration;
 using MatSmtp.Core.Security;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Relay;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Webhooks;
 
 /// <summary>One webhook: address, what it gets, the secret of the signature, extra headers; a test call.</summary>
-public sealed class EditModel(MsDbContext db, SecretProtector secrets, WebhookService webhooks, ActivityLogger log) : PageModelBase
+public sealed class EditModel(WebhookAdminService hooks, SecretProtector secrets, WebhookService webhooks, ActivityLogger log) : PageModelBase
 {
     public sealed class InputModel
     {
@@ -97,14 +95,7 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, WebhookSe
             return Page();
         }
 
-        var hook = Item is null ? new Webhook() : await db.Webhook.FirstAsync(w => w.Id == Item.Id);
-        Apply(hook);
-        if (Item is null)
-        {
-            db.Webhook.Add(hook);
-        }
-
-        await db.SaveChangesAsync();
+        var hook = await hooks.SaveAsync(Item?.Id, Apply, HttpContext.RequestAborted);
         await log.LogAsync(Item is null ? "Webhook angelegt" : "Webhook geändert", nameof(Webhook), hook.Id, $"{hook.Name} ({hook.Url})");
         Flash("Der Webhook ist gespeichert.");
         return RedirectToPage(new { id = hook.Id });
@@ -134,14 +125,12 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, WebhookSe
 
     public async Task<IActionResult> OnPostDeleteAsync()
     {
-        var hook = await db.Webhook.FirstOrDefaultAsync(w => w.Id == Id);
+        var hook = Id is { } id ? await hooks.DeleteAsync(id, HttpContext.RequestAborted) : null;
         if (hook is null)
         {
             return RedirectToPage("/Webhooks/Index");
         }
 
-        db.Webhook.Remove(hook);
-        await db.SaveChangesAsync();
         await log.LogAsync("Webhook gelöscht", nameof(Webhook), hook.Id, hook.Name);
         Flash("Der Webhook ist gelöscht.");
         return RedirectToPage("/Webhooks/Index");
@@ -200,13 +189,13 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, WebhookSe
     {
         if (Id is { } id)
         {
-            Item = await db.Webhook.AsNoTracking().FirstOrDefaultAsync(w => w.Id == id);
+            Item = await hooks.FindAsync(id, HttpContext.RequestAborted);
             if (Item is null)
             {
                 return false;
             }
 
-            RuleCount = await db.Rule.CountAsync(r => r.WebhookId == id);
+            RuleCount = await hooks.CountRulesAsync(id, HttpContext.RequestAborted);
         }
 
         var title = Item?.Name ?? "Neuer Webhook";

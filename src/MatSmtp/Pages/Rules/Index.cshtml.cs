@@ -1,13 +1,12 @@
 using System.Globalization;
 using System.Net;
 using MatSmtp.Core.Relay;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
+using MatSmtp.Services.Relay;
 using MatSmtp.UiKit;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Rules;
 
@@ -15,7 +14,7 @@ namespace MatSmtp.Pages.Rules;
 /// The rules in their order: the relay asks them top to bottom, every matching rule applies its changes, the first one with a decision ends it. The order is changed
 /// with the arrows of a row (one shared form below the list).
 /// </summary>
-public sealed class IndexModel(MsDbContext db, ActivityLogger log) : PageModelBase
+public sealed class IndexModel(RuleService rules, ActivityLogger log) : PageModelBase
 {
     public const string MoveForm = "rule-move";
 
@@ -28,37 +27,7 @@ public sealed class IndexModel(MsDbContext db, ActivityLogger log) : PageModelBa
     public async Task OnGetAsync()
     {
         Head("Regeln", "Von oben nach unten geprüft: jede passende Regel wendet ihre Änderungen an, die erste mit einer Entscheidung beendet die Prüfung. Ohne Entscheidung geht die Nachricht über das Standardkonto.", ("Relay", null), ("Regeln", null));
-        var accounts = await db.SmtpAccount.AsNoTracking().OrderBy(a => a.Name).Select(a => new { a.Id, a.Name }).ToListAsync();
-        var spec = new ListSpec<Rule>
-        {
-            Id = "rules",
-            Action = "/Rules",
-            Label = "Regeln",
-            Noun = "Regeln",
-            SearchPlaceholder = "Name, Absender, Empfänger, Netz ...",
-            Search = (q, text) =>
-            {
-                var like = Like.Contains(text);
-                return q.Where(r => EF.Functions.Like(r.Name, like, Like.Escape) || EF.Functions.Like(r.Description ?? "", like, Like.Escape) || EF.Functions.Like(r.MatchSenders ?? "", like, Like.Escape)
-                    || EF.Functions.Like(r.MatchRecipients ?? "", like, Like.Escape) || EF.Functions.Like(r.MatchNetworks ?? "", like, Like.Escape) || EF.Functions.Like(r.RewriteFrom ?? "", like, Like.Escape));
-            },
-            Filters =
-            [
-                new FilterSpec<Rule>("aktion", "Aktion", ListBuilder.EnumOptions<RuleAction>(Labels.Of), (q, v) => q.Where(r => r.Action == Enum.Parse<RuleAction>(v))),
-                new FilterSpec<Rule>("konto", "Konto", [.. accounts.Select(a => new FilterOption(a.Id.ToString(CultureInfo.InvariantCulture), a.Name))], (q, v) => long.TryParse(v, out var id) ? q.Where(r => r.AccountId == id) : q),
-                new FilterSpec<Rule>("status", "Status", [new("aktiv", "Aktiv"), new("aus", "Abgeschaltet")], (q, v) => v == "aus" ? q.Where(r => !r.IsEnabled) : q.Where(r => r.IsEnabled)),
-            ],
-            Sorts = new Dictionary<string, (string, Func<IQueryable<Rule>, bool, IOrderedQueryable<Rule>>)>
-            {
-                ["position"] = ("Reihenfolge", (q, d) => d ? q.OrderByDescending(r => r.Position).ThenByDescending(r => r.Id) : q.OrderBy(r => r.Position).ThenBy(r => r.Id)),
-                ["name"] = ("Name", (q, d) => d ? q.OrderByDescending(r => r.Name) : q.OrderBy(r => r.Name)),
-                ["hits"] = ("Treffer", (q, d) => d ? q.OrderByDescending(r => r.HitCount) : q.OrderBy(r => r.HitCount)),
-            },
-            DefaultSort = "position",
-            PageSize = 50,
-        };
-
-        var result = await ListBuilder.RunAsync(db.Rule.AsNoTracking().Include(r => r.Account).Include(r => r.Webhook).Include(r => r.MatchRelayUser), Request, spec, HttpContext.RequestAborted);
+        var result = await rules.ListAsync(Request, HttpContext.RequestAborted);
         Toolbar = result.Toolbar;
         Pager = result.Pager;
         var ordered = Toolbar.Sort == "position" && !Toolbar.Descending && !Toolbar.SearchActive && Toolbar.ActiveFilters == 0;
@@ -91,28 +60,12 @@ public sealed class IndexModel(MsDbContext db, ActivityLogger log) : PageModelBa
             return RedirectToPage();
         }
 
-        var rules = await db.Rule.OrderBy(r => r.Position).ThenBy(r => r.Id).ToListAsync();
-        var i = rules.FindIndex(r => r.Id == id);
-        var j = parts[1] == "up" ? i - 1 : i + 1;
-        if (i < 0 || j < 0 || j >= rules.Count)
+        if (await rules.MoveAsync(id, parts[1] == "up", HttpContext.RequestAborted) is { } moved)
         {
-            return RedirectToPage();
+            await log.LogAsync("Regel verschoben", nameof(Rule), id, $"{moved.Rule.Name} auf Platz {moved.Place}");
         }
 
-        (rules[i], rules[j]) = (rules[j], rules[i]);
-        Renumber(rules);
-        await db.SaveChangesAsync();
-        await log.LogAsync("Regel verschoben", nameof(Rule), id, $"{rules[j].Name} auf Platz {j + 1}");
         return RedirectToPage();
-    }
-
-    /// <summary>Positions 10, 20, 30 ...: room for a rule in between, and the numbers of the list stay what the person sees.</summary>
-    public static void Renumber(IList<Rule> rules)
-    {
-        for (var k = 0; k < rules.Count; k++)
-        {
-            rules[k].Position = (k + 1) * 10;
-        }
     }
 
     public static string Conditions(Rule r)

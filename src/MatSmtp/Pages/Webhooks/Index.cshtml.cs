@@ -1,13 +1,12 @@
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
+using MatSmtp.Services.Relay;
 using MatSmtp.UiKit;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Webhooks;
 
 /// <summary>The addresses that rules hand messages to (HTTP POST with JSON).</summary>
-public sealed class IndexModel(MsDbContext db) : PageModelBase
+public sealed class IndexModel(WebhookAdminService webhooks) : PageModelBase
 {
     public ToolbarModel Toolbar { get; private set; } = null!;
 
@@ -18,32 +17,7 @@ public sealed class IndexModel(MsDbContext db) : PageModelBase
     public async Task OnGetAsync()
     {
         Head("Webhooks", "Adressen, an die Regeln eine Nachricht weitergeben: als HTTP-POST mit JSON, auf Wunsch signiert.", ("Relay", null), ("Webhooks", null));
-        var spec = new ListSpec<Webhook>
-        {
-            Id = "webhooks",
-            Action = "/Webhooks",
-            Label = "Webhooks",
-            Noun = "Webhooks",
-            SearchPlaceholder = "Name oder Adresse ...",
-            Search = (q, text) =>
-            {
-                var like = Like.Contains(text);
-                return q.Where(w => EF.Functions.Like(w.Name, like, Like.Escape) || EF.Functions.Like(w.Url, like, Like.Escape));
-            },
-            Filters =
-            [
-                new FilterSpec<Webhook>("status", "Status", [new("aktiv", "Aktiv"), new("aus", "Abgeschaltet"), new("fehler", "Letzter Aufruf fehlgeschlagen")],
-                    (q, v) => v switch { "aus" => q.Where(w => !w.IsEnabled), "fehler" => q.Where(w => w.LastError != null), _ => q.Where(w => w.IsEnabled) }),
-            ],
-            Sorts = new Dictionary<string, (string, Func<IQueryable<Webhook>, bool, IOrderedQueryable<Webhook>>)>
-            {
-                ["name"] = ("Name", (q, d) => d ? q.OrderByDescending(w => w.Name) : q.OrderBy(w => w.Name)),
-                ["called"] = ("Zuletzt aufgerufen", (q, d) => d ? q.OrderByDescending(w => w.LastCallDate) : q.OrderBy(w => w.LastCallDate)),
-            },
-            DefaultSort = "name",
-        };
-
-        var result = await ListBuilder.RunAsync(db.Webhook.AsNoTracking(), Request, spec, HttpContext.RequestAborted);
+        var result = await webhooks.ListAsync(Request, HttpContext.RequestAborted);
         Toolbar = result.Toolbar;
         Pager = result.Pager;
         Table = TableModel.Of("webhook-table", "Webhooks", result.Items,
