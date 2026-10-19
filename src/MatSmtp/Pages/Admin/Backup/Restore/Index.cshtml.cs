@@ -1,12 +1,10 @@
 using MatSmtp.Configuration;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Backup;
 using MatSmtp.Storage;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Admin.Backup.Restore;
 
@@ -16,7 +14,7 @@ namespace MatSmtp.Pages.Admin.Backup.Restore;
 /// </summary>
 [DisableRequestSizeLimit]
 [RequestFormLimits(MultipartBodyLengthLimit = long.MaxValue)]
-public sealed class IndexModel(MsDbContext db, BackupService backups, BackupStoreFactory stores, ConfigStore config) : PageModelBase
+public sealed class IndexModel(BackupAdminService admin, BackupService backups, BackupStoreFactory stores, ConfigStore config) : PageModelBase
 {
     [BindProperty(SupportsGet = true)]
     public long? TargetId { get; set; }
@@ -35,7 +33,7 @@ public sealed class IndexModel(MsDbContext db, BackupService backups, BackupStor
     {
         backups.CleanStaged();
         await PrepareAsync();
-        if (TargetId is { } id && await db.BackupTarget.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id) is { } target)
+        if (TargetId is { } id && await admin.FindTargetAsync(id, HttpContext.RequestAborted) is { } target)
         {
             try
             {
@@ -64,7 +62,7 @@ public sealed class IndexModel(MsDbContext db, BackupService backups, BackupStor
 
     public async Task<IActionResult> OnPostFetchAsync(long targetId, string name, string? passphrase)
     {
-        var target = await db.BackupTarget.AsNoTracking().FirstOrDefaultAsync(t => t.Id == targetId);
+        var target = await admin.FindTargetAsync(targetId, HttpContext.RequestAborted);
         if (target is null || !BackupNames.IsBackup(name))
         {
             return NotFound();
@@ -112,6 +110,6 @@ public sealed class IndexModel(MsDbContext db, BackupService backups, BackupStor
         Head("Wiederherstellen", "Eine Sicherung zurückspielen.", ("Einstellungen", null), ("Sicherung", "/Admin/Backup"), ("Wiederherstellen", null));
         ViewData["ActiveHref"] = "/Admin/Backup/Restore";
         ViewData["Width"] = "narrow";
-        Targets = await db.BackupTarget.AsNoTracking().OrderBy(t => t.Name).Select(t => new SelectListItem(t.Name, t.Id.ToString(), t.Id == TargetId)).ToListAsync();
+        Targets = [.. (await admin.TargetChoicesAsync(HttpContext.RequestAborted)).Select(t => new SelectListItem(t.Name, t.Id.ToString(), t.Id == TargetId))];
     }
 }

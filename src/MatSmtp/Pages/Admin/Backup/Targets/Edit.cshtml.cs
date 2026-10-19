@@ -1,17 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using MatSmtp.Configuration;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Backup;
 using MatSmtp.Storage;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Admin.Backup.Targets;
 
 /// <summary>A target: a folder, or a share of a NAS with its sign-in. The password is kept protected. "Prüfen" writes and removes a small file to see that it works.</summary>
-public sealed class EditModel(MsDbContext db, SecretProtector secrets, BackupStoreFactory stores, ActivityLogger log) : PageModelBase
+public sealed class EditModel(BackupAdminService admin, SecretProtector secrets, BackupStoreFactory stores, ActivityLogger log) : PageModelBase
 {
     public sealed class InputModel
     {
@@ -87,9 +85,7 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, BackupSto
             return Page();
         }
 
-        var target = Target is { } existing ? await db.BackupTarget.FirstAsync(t => t.Id == existing.Id) : db.BackupTarget.Add(new BackupTarget()).Entity;
-        Apply(target);
-        await db.SaveChangesAsync();
+        var target = await admin.SaveTargetAsync(Target?.Id, Apply, HttpContext.RequestAborted);
         await log.LogAsync("Sicherungsziel gespeichert", "BackupTarget", target.Id, target.Name);
         Flash("Das Ziel ist gespeichert.");
         return RedirectToPage("/Admin/Backup/Targets/Index");
@@ -125,20 +121,23 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, BackupSto
 
     public async Task<IActionResult> OnPostDeleteAsync()
     {
-        var target = await db.BackupTarget.FirstOrDefaultAsync(t => t.Id == Id);
-        if (target is null)
+        if (Id is not { } id || await admin.FindTargetAsync(id, HttpContext.RequestAborted) is null)
         {
             return RedirectToPage("/Admin/Backup/Targets/Index");
         }
 
-        if (await db.BackupPlan.AnyAsync(p => p.TargetId == target.Id))
+        if (await admin.TargetInUseAsync(id, HttpContext.RequestAborted))
         {
             FlashError("Dieses Ziel wird von einem Plan benutzt. Ändere oder lösche zuerst den Plan.");
             return RedirectToPage(new { id = Id });
         }
 
-        db.BackupTarget.Remove(target);
-        await db.SaveChangesAsync();
+        var target = await admin.DeleteTargetAsync(id, HttpContext.RequestAborted);
+        if (target is null)
+        {
+            return RedirectToPage("/Admin/Backup/Targets/Index");
+        }
+
         await log.LogAsync("Sicherungsziel gelöscht", "BackupTarget", target.Id, target.Name);
         Flash("Das Ziel ist gelöscht. Die Sicherungen dort bleiben liegen.");
         return RedirectToPage("/Admin/Backup/Targets/Index");
@@ -186,7 +185,7 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, BackupSto
     {
         if (Id is { } id)
         {
-            Target = await db.BackupTarget.AsNoTracking().FirstOrDefaultAsync(t => t.Id == id);
+            Target = await admin.FindTargetAsync(id, HttpContext.RequestAborted);
             if (Target is null)
             {
                 return false;

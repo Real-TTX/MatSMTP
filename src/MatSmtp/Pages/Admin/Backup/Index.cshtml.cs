@@ -1,11 +1,9 @@
 using MatSmtp.Configuration;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Backup;
 using MatSmtp.UiKit;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Admin.Backup;
 
@@ -13,9 +11,9 @@ namespace MatSmtp.Pages.Admin.Backup;
 /// The backup at a glance: is it on, what ran last, what runs next, and a button to take a backup to download right now (for the case that there is no NAS yet,
 /// or before an update).
 /// </summary>
-public sealed class IndexModel(MsDbContext db, ConfigStore config, BackupService backups, ActivityLogger log, TimeProvider clock) : PageModelBase
+public sealed class IndexModel(BackupAdminService admin, ConfigStore config, BackupService backups, ActivityLogger log, TimeProvider clock) : PageModelBase
 {
-    public List<BackupPlan> Plans { get; private set; } = [];
+    public IReadOnlyList<BackupPlan> Plans { get; private set; } = [];
 
     public TableModel Runs { get; private set; } = null!;
 
@@ -34,15 +32,10 @@ public sealed class IndexModel(MsDbContext db, ConfigStore config, BackupService
     public async Task OnGetAsync()
     {
         Head("Sicherung", "Datenbank, Einstellungen und Anhänge auf ein NAS oder in einen Ordner sichern.", ("Einstellungen", null), ("Sicherung", null));
-        Plans = await db.BackupPlan.AsNoTracking().Include(p => p.Target).OrderBy(p => p.Name).ToListAsync();
-        TargetCount = await db.BackupTarget.CountAsync();
-        LastRun = await db.BackupRun.AsNoTracking().OrderByDescending(r => r.StartDate).FirstOrDefaultAsync();
-
-        var total = await db.BackupRun.CountAsync();
-        var page = Math.Min(Math.Max(1, ListQuery.Page(Request)), Math.Max(1, (int)Math.Ceiling(total / 10.0)));
-        var runs = await db.BackupRun.AsNoTracking().OrderByDescending(r => r.StartDate).Skip((page - 1) * 10).Take(10).ToListAsync();
-        Pager = new PagerModel { Page = page, PageSize = 10, Total = total, Url = p => Url.Page("/Admin/Backup/Index", new { page = p })! };
-        Runs = TableModel.Of("run-table", "Sicherungen der letzten Zeit", runs,
+        var overview = await admin.OverviewAsync(ListQuery.Page(Request), 10, HttpContext.RequestAborted);
+        (Plans, TargetCount, LastRun) = (overview.Plans, overview.TargetCount, overview.LastRun);
+        Pager = new PagerModel { Page = overview.Page, PageSize = 10, Total = overview.RunCount, Url = p => Url.Page("/Admin/Backup/Index", new { page = p })! };
+        Runs = TableModel.Of("run-table", "Sicherungen der letzten Zeit", overview.Runs,
         [
             (new TableColumn("Wann"), r => Ui.Text(Fmt.Moment(r.StartDate))),
             (new TableColumn("Plan"), r => Ui.NameWithSub(r.PlanName ?? "Einzelne Sicherung", null, (r.IsManual ? "von Hand" : "automatisch") + (r.TargetName is null ? "" : " → " + r.TargetName))),

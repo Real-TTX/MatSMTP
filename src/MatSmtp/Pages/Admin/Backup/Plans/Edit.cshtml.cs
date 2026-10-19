@@ -1,18 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using MatSmtp.Configuration;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Backup;
-using MatSmtp.UiKit;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Admin.Backup.Plans;
 
 /// <summary>One plan. The passphrase (optional) encrypts every backup of the plan; it is kept protected so that the plan can run by itself.</summary>
-public sealed class EditModel(MsDbContext db, SecretProtector secrets, ActivityLogger log, TimeProvider clock, IServiceScopeFactory scopes) : PageModelBase
+public sealed class EditModel(BackupAdminService admin, SecretProtector secrets, ActivityLogger log) : PageModelBase
 {
     public sealed class InputModel
     {
@@ -124,7 +121,14 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, ActivityL
             return Page();
         }
 
-        var plan = Plan is { } existing ? await db.BackupPlan.FirstAsync(p => p.Id == existing.Id) : db.BackupPlan.Add(new BackupPlan()).Entity;
+        var plan = await admin.SavePlanAsync(Plan?.Id, plan => Apply(plan, time), HttpContext.RequestAborted);
+        await log.LogAsync("Sicherungsplan gespeichert", "BackupPlan", plan.Id, plan.Name);
+        Flash("Der Plan ist gespeichert.");
+        return RedirectToPage("/Admin/Backup/Plans/Index");
+    }
+
+    private void Apply(BackupPlan plan, TimeOnly time)
+    {
         plan.Name = Input.Name.Trim();
         plan.TargetId = Input.TargetId!.Value;
         plan.Scope = Input.Scope;
@@ -146,19 +150,12 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, ActivityL
         {
             plan.PassphraseProtected = null;
         }
-
-        plan.NextRunDate = BackupSchedule.Next(plan, clock.GetUtcNow().UtcDateTime, Fmt.Zone);
-        await db.SaveChangesAsync();
-        await log.LogAsync("Sicherungsplan gespeichert", "BackupPlan", plan.Id, plan.Name);
-        Flash("Der Plan ist gespeichert.");
-        return RedirectToPage("/Admin/Backup/Plans/Index");
     }
 
     /// <summary>Starts the plan now, in the background (a backup of many files takes a while); the overview shows when it is done.</summary>
     public async Task<IActionResult> OnPostRunAsync()
     {
-        var plan = await db.BackupPlan.AsNoTracking().FirstOrDefaultAsync(p => p.Id == Id);
-        if (plan is null)
+        if (Id is not { } id || await admin.FindPlanAsync(id, HttpContext.RequestAborted) is null)
         {
             return NotFound();
         }
@@ -169,32 +166,16 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, ActivityL
             return RedirectToPage("/Admin/Backup/Index");
         }
 
-        var planId = plan.Id;
-        _ = Task.Run(async () =>
-        {
-            using var scope = scopes.CreateScope();
-            var scoped = scope.ServiceProvider;
-            var p = await scoped.GetRequiredService<MsDbContext>().BackupPlan.Include(x => x.Target).FirstAsync(x => x.Id == planId);
-            try
-            {
-                await scoped.GetRequiredService<BackupService>().RunPlanAsync(p, manual: true);
-            }
-            catch (BackupException)
-            {
-                // somebody else started a backup in the meantime
-            }
-        });
+        await admin.StartPlanAsync(id, HttpContext.RequestAborted);
         Flash("Die Sicherung läuft. Das Ergebnis erscheint in der Übersicht.");
         return RedirectToPage("/Admin/Backup/Index");
     }
 
     public async Task<IActionResult> OnPostDeleteAsync()
     {
-        var plan = await db.BackupPlan.FirstOrDefaultAsync(p => p.Id == Id);
+        var plan = Id is { } id ? await admin.DeletePlanAsync(id, HttpContext.RequestAborted) : null;
         if (plan is not null)
         {
-            db.BackupPlan.Remove(plan);
-            await db.SaveChangesAsync();
             await log.LogAsync("Sicherungsplan gelöscht", "BackupPlan", plan.Id, plan.Name);
             Flash("Der Plan ist gelöscht. Die Sicherungen am Ziel bleiben liegen.");
         }
@@ -206,14 +187,14 @@ public sealed class EditModel(MsDbContext db, SecretProtector secrets, ActivityL
     {
         if (Id is { } id)
         {
-            Plan = await db.BackupPlan.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
+            Plan = await admin.FindPlanAsync(id, HttpContext.RequestAborted);
             if (Plan is null)
             {
                 return false;
             }
         }
 
-        Targets = await db.BackupTarget.AsNoTracking().OrderBy(t => t.Name).Select(t => new SelectListItem(t.Name, t.Id.ToString())).ToListAsync();
+        Targets = [.. (await admin.TargetChoicesAsync(HttpContext.RequestAborted)).Select(t => new SelectListItem(t.Name, t.Id.ToString()))];
         var title = Plan is null ? "Neuer Plan" : Plan.Name;
         Head(title, null, ("Einstellungen", null), ("Sicherung", "/Admin/Backup"), ("Pläne", "/Admin/Backup/Plans"), (title, null));
         ViewData["ActiveHref"] = "/Admin/Backup/Plans";

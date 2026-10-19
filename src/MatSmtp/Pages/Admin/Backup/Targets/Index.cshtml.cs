@@ -1,13 +1,12 @@
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
+using MatSmtp.Services.Backup;
 using MatSmtp.UiKit;
-using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Pages.Admin.Backup.Targets;
 
 /// <summary>The places backups are written to: a folder in the volume or on the machine, or a share of a NAS.</summary>
-public sealed class IndexModel(MsDbContext db) : PageModelBase
+public sealed class IndexModel(BackupAdminService admin) : PageModelBase
 {
     public ToolbarModel Toolbar { get; private set; } = null!;
 
@@ -24,26 +23,7 @@ public sealed class IndexModel(MsDbContext db) : PageModelBase
         Head("Sicherungsziele", "Wohin die Sicherungen geschrieben werden.", ("Einstellungen", null), ("Sicherung", "/Admin/Backup"), ("Ziele", null));
         ViewData["ActiveHref"] = "/Admin/Backup/Targets";
 
-        var spec = new ListSpec<BackupTarget>
-        {
-            Id = "targets",
-            Action = "/Admin/Backup/Targets",
-            Label = "Ziele",
-            Noun = "Ziele",
-            SearchPlaceholder = "Name oder Ort ...",
-            Search = (q, text) =>
-            {
-                var like = Like.Contains(text);
-                return q.Where(t => EF.Functions.Like(t.Name, like, Like.Escape) || EF.Functions.Like(t.Path, like, Like.Escape) || EF.Functions.Like(t.Host ?? "", like, Like.Escape));
-            },
-            Sorts = new Dictionary<string, (string, Func<IQueryable<BackupTarget>, bool, IOrderedQueryable<BackupTarget>>)>
-            {
-                ["name"] = ("Name", (q, d) => d ? q.OrderByDescending(t => t.Name) : q.OrderBy(t => t.Name)),
-            },
-            DefaultSort = "name",
-        };
-
-        var result = await ListBuilder.RunAsync(db.BackupTarget.AsNoTracking(), Request, spec, HttpContext.RequestAborted);
+        var result = await admin.ListTargetsAsync(Request, HttpContext.RequestAborted);
         Toolbar = result.Toolbar;
         Pager = result.Pager;
         Table = TableModel.Of("target-table", "Sicherungsziele", result.Items,

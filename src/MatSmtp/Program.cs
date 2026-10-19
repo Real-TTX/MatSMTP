@@ -90,6 +90,7 @@ builder.Services.AddHostedService<DeliveryWorker>();
 builder.Services.AddScoped<BackupStoreFactory>();
 builder.Services.AddScoped<DatabaseArchive>();
 builder.Services.AddScoped<BackupService>();
+builder.Services.AddScoped<BackupAdminService>();
 builder.Services.AddHostedService<BackupScheduler>();
 builder.Services.AddHostedService<MaintenanceService>();
 builder.Services.AddScoped<SystemService>();
