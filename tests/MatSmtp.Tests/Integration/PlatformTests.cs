@@ -32,6 +32,9 @@ public sealed class PlatformTests(AppFixture app) : IClassFixture<AppFixture>
         Assert.Equal("#f5b800", definition.App.Accent);
         Assert.True(definition.Configure.Count <= 10, "at most ten settings");
         Assert.Equal(["admin", "user"], definition.Roles!.Select(r => r.Key).ToArray());
+
+        // All engines on one copy of the package.
+        Assert.Equal("1.3.0", MatPlatformInfo.Version);
     }
 
     [Fact]
