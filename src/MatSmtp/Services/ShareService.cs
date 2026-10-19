@@ -1,6 +1,7 @@
 using MatSmtp.Configuration;
 using MatSmtp.Data;
 using MatSmtp.Data.Entities;
+using MatSmtp.UiKit;
 using Microsoft.EntityFrameworkCore;
 
 namespace MatSmtp.Services;
@@ -57,6 +58,43 @@ public sealed class ShareService(MsDbContext db, ConfigStore config, TimeProvide
         link.Views++;
         link.LastViewDate = clock.GetUtcNow().UtcDateTime;
         await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>The links of one message, the newest first.</summary>
+    public Task<List<ShareLink>> ForMessageAsync(long messageId, CancellationToken ct = default)
+        => db.ShareLink.AsNoTracking().Where(l => l.MessageId == messageId).OrderByDescending(l => l.Id).ToListAsync(ct);
+
+    /// <summary>The list of the page Freigaben: search, filter, sort and page of the request; each link with its message.</summary>
+    public Task<ListResult<ShareLink>> ListAsync(HttpRequest request, CancellationToken ct = default)
+    {
+        var now = clock.GetUtcNow().UtcDateTime;
+        var spec = new ListSpec<ShareLink>
+        {
+            Id = "shares",
+            Action = "/Admin/Shares",
+            Label = "Freigaben",
+            Noun = "Freigaben",
+            SearchPlaceholder = "Notiz, Betreff oder Empfänger ...",
+            Search = (q, text) =>
+            {
+                var like = Like.Contains(text);
+                return q.Where(l => EF.Functions.Like(l.Note ?? "", like, Like.Escape) || EF.Functions.Like(l.Message!.Subject ?? "", like, Like.Escape) || EF.Functions.Like(l.Message!.Recipients, like, Like.Escape));
+            },
+            Filters =
+            [
+                new FilterSpec<ShareLink>("status", "Status", [new("aktiv", "Gültig"), new("abgelaufen", "Abgelaufen oder widerrufen")],
+                    (q, v) => v == "aktiv" ? q.Where(l => l.RevokedDate == null && l.ExpiresDate > now) : q.Where(l => l.RevokedDate != null || l.ExpiresDate <= now)),
+            ],
+            Sorts = new Dictionary<string, (string, Func<IQueryable<ShareLink>, bool, IOrderedQueryable<ShareLink>>)>
+            {
+                ["created"] = ("Angelegt", (q, d) => d ? q.OrderBy(l => l.CreateDate) : q.OrderByDescending(l => l.CreateDate)),
+                ["expires"] = ("Gültig bis", (q, d) => d ? q.OrderByDescending(l => l.ExpiresDate) : q.OrderBy(l => l.ExpiresDate)),
+                ["views"] = ("Aufrufe", (q, d) => d ? q.OrderBy(l => l.Views) : q.OrderByDescending(l => l.Views)),
+            },
+            DefaultSort = "created",
+        };
+
+        return ListBuilder.RunAsync(db.ShareLink.AsNoTracking().Include(l => l.Message), request, spec, ct);
     }
 
     public async Task<bool> RevokeAsync(long id, CancellationToken ct = default)

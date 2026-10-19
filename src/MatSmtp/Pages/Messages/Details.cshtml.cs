@@ -1,17 +1,15 @@
 using MatSmtp.Core.Relay;
-using MatSmtp.Data;
 using MatSmtp.Data.Entities;
 using MatSmtp.Services;
 using MatSmtp.Services.Relay;
 using MatSmtp.UiKit;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using MimeKit;
 
 namespace MatSmtp.Pages.Messages;
 
 /// <summary>One message: envelope, origin, delivery, webhooks, history, its headers and text, and the share links that show its delivery to others.</summary>
-public sealed class DetailsModel(MsDbContext db, DeliveryService delivery, SpoolStore spool, ShareService shares, NavCounts counts, SpoolSignal signal, ActivityLogger log, TimeProvider clock) : PageModelBase
+public sealed class DetailsModel(MessageService messages, DeliveryService delivery, SpoolStore spool, ShareService shares, NavCounts counts, SpoolSignal signal, ActivityLogger log, TimeProvider clock) : PageModelBase
 {
     public sealed record HeaderLine(string Name, string Value);
 
@@ -77,7 +75,7 @@ public sealed class DetailsModel(MsDbContext db, DeliveryService delivery, Spool
 
     public async Task<IActionResult> OnPostShareAsync()
     {
-        if (!await db.Message.AnyAsync(m => m.Id == Id))
+        if (!await messages.ExistsAsync(Id, HttpContext.RequestAborted))
         {
             return NotFound();
         }
@@ -101,40 +99,34 @@ public sealed class DetailsModel(MsDbContext db, DeliveryService delivery, Spool
 
     public async Task<IActionResult> OnPostDeleteAsync()
     {
-        var message = await db.Message.FirstOrDefaultAsync(m => m.Id == Id);
-        if (message is null)
+        var (outcome, subject) = await messages.DeleteOneAsync(Id, HttpContext.RequestAborted);
+        if (outcome == MessageDeleteOutcome.NotFound)
         {
             return RedirectToPage("/Messages/Index");
         }
 
-        if (message.Status == MessageStatus.Sending)
+        if (outcome == MessageDeleteOutcome.Sending)
         {
             FlashError("Die Nachricht wird gerade versendet. Versuche es gleich noch einmal.");
             return RedirectToPage(new { id = Id });
         }
 
-        spool.Delete(message.StorageKey);
-        db.Message.Remove(message);
-        await db.SaveChangesAsync();
         counts.Invalidate();
-        await log.LogAsync("Nachricht gelöscht", nameof(Message), Id, message.Subject);
+        await log.LogAsync("Nachricht gelöscht", nameof(Message), Id, subject);
         Flash("Die Nachricht ist gelöscht.");
         return RedirectToPage("/Messages/Index");
     }
 
     private async Task<bool> LoadAsync()
     {
-        var item = await db.Message.AsNoTracking().AsSplitQuery()
-            .Include(m => m.Events.OrderBy(e => e.OccurredDate).ThenBy(e => e.Id))
-            .Include(m => m.WebhookDeliveries)
-            .FirstOrDefaultAsync(m => m.Id == Id);
+        var item = await messages.FindWithHistoryAsync(Id, HttpContext.RequestAborted);
         if (item is null)
         {
             return false;
         }
 
         Item = item;
-        Links = await db.ShareLink.AsNoTracking().Where(l => l.MessageId == Id).OrderByDescending(l => l.Id).ToListAsync();
+        Links = await shares.ForMessageAsync(Id, HttpContext.RequestAborted);
         HasContent = spool.Exists(item.StorageKey);
         if (HasContent)
         {
