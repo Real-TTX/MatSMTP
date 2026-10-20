@@ -262,6 +262,79 @@ namespace MatSmtp.Data.Migrations
                     b.ToTable("BackupTarget");
                 });
 
+            modelBuilder.Entity("MatSmtp.Data.Entities.DkimKey", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CreateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DnsCheckedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DnsDetail")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DnsState")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<bool>("IncludeSubdomains")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("KeyBits")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastUsedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PrivateKeyProtected")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PublicKey")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Selector")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.Property<DateTime>("UpdateDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<short>("UpdateState")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("UpdateUserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Domain", "Selector")
+                        .IsUnique()
+                        .HasFilter("\"UpdateState\" <> 0");
+
+                    b.ToTable("DkimKey");
+                });
+
             modelBuilder.Entity("MatSmtp.Data.Entities.Message", b =>
                 {
                     b.Property<long>("Id")

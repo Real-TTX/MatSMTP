@@ -12,14 +12,18 @@ using MimeKit;
 namespace MatSmtp.Services.Relay;
 
 /// <summary>The result of sending one message through an account: sent, to be tried again, or failed for good.</summary>
-public sealed record SendOutcome(bool Ok, bool Permanent, string Text);
+public sealed record SendOutcome(bool Ok, bool Permanent, string Text)
+{
+    /// <summary>What DKIM did before the message went out (empty when no key is meant for its sender).</summary>
+    public DkimOutcome Dkim { get; init; } = DkimOutcome.None;
+}
 
 /// <summary>
 /// The spooler: sends the messages of the queue through their SMTP accounts, keeps to the limits of an account, tries again after a temporary error (the waits
 /// of <see cref="RetrySchedule"/>) and gives up after the maximum number of attempts or a permanent error (5xx). One message is only ever sent by one worker: the
 /// switch to "Sending" is a conditional update.
 /// </summary>
-public sealed class DeliveryService(MsDbContext db, ConfigStore config, SpoolStore spool, SecretProtector secrets, TimeProvider clock, ILogger<DeliveryService> logger)
+public sealed class DeliveryService(MsDbContext db, ConfigStore config, SpoolStore spool, SecretProtector secrets, DkimService dkim, TimeProvider clock, ILogger<DeliveryService> logger)
 {
     /// <summary>The ids of the messages that are due now, oldest first.</summary>
     public Task<List<long>> DueAsync(int max, CancellationToken ct)
@@ -184,6 +188,9 @@ public sealed class DeliveryService(MsDbContext db, ConfigStore config, SpoolSto
             return new SendOutcome(false, true, "Die Nachricht hat keinen Empfänger.");
         }
 
+        // The last change to the message: anything after it (a header, another encoding) would break the signature.
+        var signed = await dkim.SignAsync(mime, ct);
+
         // The bounce address <> stays empty; MailKit wants a mailbox, so an empty sender is taken from the header.
         var sender = string.IsNullOrEmpty(envelopeFrom) ? mime.From.Mailboxes.FirstOrDefault() ?? new MailboxAddress("", "") : MailboxAddress.Parse(envelopeFrom);
         using var client = new SmtpClient { Timeout = Math.Clamp(account.TimeoutSeconds, 5, 300) * 1000 };
@@ -192,11 +199,11 @@ public sealed class DeliveryService(MsDbContext db, ConfigStore config, SpoolSto
             await ConnectAsync(client, account, ct);
             var response = await client.SendAsync(mime, sender, recipients, ct);
             await client.DisconnectAsync(true, ct);
-            return new SendOutcome(true, false, string.IsNullOrWhiteSpace(response) ? "250 OK" : response.Trim());
+            return new SendOutcome(true, false, string.IsNullOrWhiteSpace(response) ? "250 OK" : response.Trim()) { Dkim = signed };
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
         {
-            return Classify(ex);
+            return Classify(ex) with { Dkim = signed };
         }
     }
 
@@ -235,6 +242,11 @@ public sealed class DeliveryService(MsDbContext db, ConfigStore config, SpoolSto
     {
         var now = clock.GetUtcNow().UtcDateTime;
         message.Attempts++;
+        if (outcome.Dkim.Problem is { } problem)
+        {
+            message.Events.Add(RelayService.Event(now, EventLevel.Warning, problem));
+        }
+
         if (account is not null)
         {
             message.AccountId = account.Id;
@@ -248,7 +260,8 @@ public sealed class DeliveryService(MsDbContext db, ConfigStore config, SpoolSto
             message.NextAttemptDate = null;
             message.LastError = null;
             message.RemoteResponse = outcome.Text.Length > 500 ? outcome.Text[..500] : outcome.Text;
-            message.Events.Add(RelayService.Event(now, EventLevel.Success, $"Versendet über „{account!.Name}“ ({account.Host}): {message.RemoteResponse}"));
+            var signedBy = outcome.Dkim.Key is { } key ? $", DKIM-signiert für {key.Domain} (Selektor {key.Selector})" : "";
+            message.Events.Add(RelayService.Event(now, EventLevel.Success, $"Versendet über „{account!.Name}“ ({account.Host}){signedBy}: {message.RemoteResponse}"));
             account.LastUsedDate = now;
             if (delivery.KeepBodyDays == 0)
             {

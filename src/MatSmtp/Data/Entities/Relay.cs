@@ -124,6 +124,45 @@ public class Webhook : AuditedEntity, ISoftDeletable
     public UpdateState UpdateState { get; set; } = UpdateState.Created;
 }
 
+/// <summary>
+/// A DKIM key of a sender domain: the spooler signs every message whose From is in the domain (see <see cref="Dkim.Choose{T}"/>) right before it goes out,
+/// after every rewrite. The public key belongs into the DNS as a TXT record under <c>&lt;selector&gt;._domainkey.&lt;domain&gt;</c>.
+/// </summary>
+public class DkimKey : AuditedEntity, ISoftDeletable
+{
+    /// <summary>Lower case, without a dot at the end (<c>firma.de</c>).</summary>
+    public string Domain { get; set; } = "";
+
+    public string Selector { get; set; } = "";
+
+    public string? Description { get; set; }
+
+    /// <summary>The private key (PEM), protected with the key ring of the application.</summary>
+    public string PrivateKeyProtected { get; set; } = "";
+
+    /// <summary>The public key (base64 of the SubjectPublicKeyInfo), the <c>p=</c> of the record.</summary>
+    public string PublicKey { get; set; } = "";
+
+    public int KeyBits { get; set; } = 2048;
+
+    /// <summary>Signs mail from subdomains too (<c>shop.firma.de</c> with <c>d=firma.de</c>) when they have no key of their own.</summary>
+    public bool IncludeSubdomains { get; set; }
+
+    /// <summary>Signs only when on: a new key starts off, so no mail goes out with a signature the DNS does not know yet.</summary>
+    public bool IsEnabled { get; set; }
+
+    public DkimDnsState DnsState { get; set; } = DkimDnsState.Unchecked;
+
+    public DateTime? DnsCheckedDate { get; set; }
+
+    /// <summary>What the lookup found, for people (the error, or the key that is published instead).</summary>
+    public string? DnsDetail { get; set; }
+
+    public DateTime? LastUsedDate { get; set; }
+
+    public UpdateState UpdateState { get; set; } = UpdateState.Created;
+}
+
 /// <summary>A rule of the policy based routing (see <see cref="RuleEngine"/>): conditions, then what happens.</summary>
 public class Rule : AuditedEntity, ISoftDeletable
 {

@@ -150,7 +150,8 @@ public sealed class EditModel(AccountService accounts, SecretProtector secrets, 
         var probe = new SmtpAccount();
         Apply(probe);
         var outcome = await delivery.SendTestAsync(probe, TestTo.Trim(), HttpContext.RequestAborted);
-        Result = outcome.Ok ? $"Die Testnachricht an {TestTo.Trim()} ist angenommen: {outcome.Text}" : outcome.Text;
+        var signed = outcome.Dkim.Key is { } key ? $" Sie ist DKIM-signiert für {key.Domain}." : outcome.Dkim.Problem is { } problem ? " " + problem : "";
+        Result = (outcome.Ok ? $"Die Testnachricht an {TestTo.Trim()} ist angenommen: {outcome.Text}" : outcome.Text) + signed;
         ResultOk = outcome.Ok;
         await log.LogAsync(outcome.Ok ? "Testnachricht versendet" : "Testnachricht fehlgeschlagen", nameof(SmtpAccount), Account?.Id, $"{probe.Name} an {TestTo.Trim()}");
         return Page();

@@ -81,6 +81,8 @@ builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<MessageService>();
 builder.Services.AddScoped<RuleService>();
 builder.Services.AddScoped<WebhookAdminService>();
+builder.Services.AddScoped<DkimService>();
+builder.Services.AddSingleton<DnsClient.ILookupClient>(_ => new DnsClient.LookupClient(new DnsClient.LookupClientOptions { UseCache = false, Timeout = TimeSpan.FromSeconds(5) }));
 builder.Services.AddScoped<ActivityService>();
 builder.Services.AddScoped<DeliveryService>();
 builder.Services.AddScoped<WebhookService>();
@@ -148,6 +150,7 @@ builder.Services.AddRazorPages(options =>
     options.Conventions.AuthorizeFolder("/Accounts", "Admin");
     options.Conventions.AuthorizeFolder("/RelayUsers", "Admin");
     options.Conventions.AuthorizeFolder("/Webhooks", "Admin");
+    options.Conventions.AuthorizeFolder("/Dkim", "Admin");
     options.Conventions.AuthorizeFolder("/Tools", "Admin");
     options.Conventions.AuthorizeFolder("/Account", "SignedIn");
     options.Conventions.AllowAnonymousToPage("/Account/Login");

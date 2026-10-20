@@ -44,6 +44,12 @@ by rules which account, which sender and which webhook a message gets.
 - Temporary errors (4xx, network, timeout) are **retried** after configurable waits, permanent ones (5xx) end it
 - Every message has its **history**: received, rules, every attempt with the server's answer, webhooks; send again or delete, one or many
 
+**DKIM**
+- **Signs outgoing mail** per sender domain (RSA-SHA256, relaxed/relaxed) – as the very last step, after every rewrite, so the signature fits the From that leaves
+- Keys are **generated** (RSA 2048 or 1024) or **imported** (PEM from the old mail server), stored encrypted; optionally valid for **subdomains** too
+- The page shows the **TXT record** to copy and **looks it up in the DNS** (published, missing, another key, empty key); a new key starts switched off
+- Changing a key: a new one with a new selector – the newest active key of a domain signs, the old one can stay in the DNS until it is deleted
+
 **Webhooks**
 - HTTP POST with **JSON**: metadata only, with text/HTML/attachment names, or the **complete .eml** (Base64)
 - Optionally **signed** (`X-MatSMTP-Signature: t=…,v1=` HMAC-SHA256), extra headers, retries – a mail becomes a ticket
@@ -358,7 +364,8 @@ with the installed Edge) sets up a fresh stack through its forms, sends real mai
 - Receiving: **SmtpServer**; reading and rewriting messages: **MimeKit**; sending: **MailKit**; backups to a NAS: **SMBLibrary**
 - The rule engine, patterns, networks and sender rewriting are a library without web types (`MatSmtp.Core`), covered by unit tests
 - Content first, then the row: a message is on disk before it is acknowledged; a crash puts messages that were being sent back into the queue
-- Secrets (account passwords, webhook secrets, the NAS password) encrypted via **DataProtection**; relay user and user passwords hashed (PBKDF2-SHA512)
+- DKIM signatures with MimeKit's **DkimSigner**, the DNS lookup with **DnsClient**
+- Secrets (account passwords, webhook secrets, DKIM private keys, the NAS password) encrypted via **DataProtection**; relay user and user passwords hashed (PBKDF2-SHA512)
 - The look is **MatUi** from MatDesign (copied into `wwwroot/ui`, never loaded from elsewhere) – plain CSS and JavaScript, no build step,
   a strict content security policy
 

@@ -26,13 +26,16 @@ A migration: `dotnet ef migrations add <Name> -p src/MatSmtp -s src/MatSmtp -o D
 ## Layout
 
 - `src/MatSmtp.Core`: no web types. `Relay/` = `AddressPattern` (the patterns of rules), `IpNetwork(s)` (CIDR), `RuleEngine` + `SenderRewrite` (the decision),
-  `RetrySchedule`, `WebhookSignature`; `Security/` (TOTP, password hashing). All covered by `tests/.../Core/RelayRuleTests.cs`.
+  `RetrySchedule`, `WebhookSignature`, `Dkim` (record name/value, keys, which key signs a From domain, comparing the DNS answer); `Security/` (TOTP, password
+  hashing). Covered by `tests/.../Core/RelayRuleTests.cs` and `DkimTests.cs`.
 - `src/MatSmtp/Services/Relay/`: `SmtpListener` (hosted, SmtpServer library: endpoints, trusted networks / AUTH, restarts on a change of the settings),
   `RelayService` (receive: parse, rules, rewrite, Received header, spool file, message row with history, webhook deliveries), `DeliveryService` + `DeliveryWorker`
   (the spooler: MailKit, limits, retries, permanent vs temporary), `WebhookService`, `SpoolStore` (`{data}/spool/yyyy/MM/dd/<guid>.eml`, keys checked before they
-  become paths), `CertificateService` (uploaded PFX/PEM or a kept self-signed one), `SpoolSignal`.
+  become paths), `CertificateService` (uploaded PFX/PEM or a kept self-signed one), `SpoolSignal`, `DkimService` (the keys for the pages, the DNS lookup, and
+  `SignAsync`: the spooler signs as the **last** change before sending, after the forced sender of the account; the message is prepared for 7 bit first, so MailKit
+  does not re-encode it and break the signature).
 - `Pages/`: `Index` (overview), `Messages/` (list + queue share `MessageListModel` and `_MessageList`, `Details`), `Rules/`, `RuleTest`, `Accounts/`, `RelayUsers/`,
-  `Webhooks/`, `Tools/Send`, `Share/Index` (`/s/{token}`, anonymous), `Admin/` (Smtp, Delivery, Users, Shares, Backup, Security, Activity, System), `Account/`.
+  `Webhooks/`, `Dkim/`, `Tools/Send`, `Share/Index` (`/s/{token}`, anonymous), `Admin/` (Smtp, Delivery, Users, Shares, Backup, Security, Activity, System), `Account/`.
 - `Services/Relay/` also holds the business layer of the pages: `RelayUserService` (pages, management API, SMTP AUTH), `AccountService`, `RelayStatusService`
   (overview, menu badges, platform tiles and health), `RelaySettingsService` (the platform settings), `MessageService`. **No `MsDbContext` or EF LINQ in a page model,
   an endpoint or a view**: a page calls a service.
@@ -72,6 +75,7 @@ A migration: `dotnet ef migrations add <Name> -p src/MatSmtp -s src/MatSmtp -o D
   sqlite-web runs as uid 1654 (the app user) for the same reason.
 - SmtpServer 11: `EndpointListener` has no public constructor (no custom listener factory); the receiver binds IPv4 `0.0.0.0`. A filter refuses with
   `SmtpResponseException`; MailKit reports a 530 as `ServiceNotAuthenticatedException`.
+- The namespace `MatSmtp.Pages.Dkim` hides the class `MatSmtp.Core.Relay.Dkim` in the pages: they use the alias `DkimRules`.
 - On Windows a certificate for TLS needs a persisted key (`CertificateService.KeyFlags`); in the container keys stay ephemeral.
 - SMBLibrary only talks SMB over TCP port 445. The dev compose has an explicit subnet (`10.253.26.0/24`).
 

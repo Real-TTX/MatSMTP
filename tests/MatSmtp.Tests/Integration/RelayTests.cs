@@ -150,6 +150,46 @@ public sealed class RelayTests : IClassFixture<AppFixture>, IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_message_is_signed_with_the_dkim_key_of_its_sender_domain_after_the_rewrite()
+    {
+        var (pem, publicKey) = MatSmtp.Core.Relay.Dkim.Generate(1024);
+        await _app.WithScopeAsync(sp => sp.GetRequiredService<Services.Relay.DkimService>().SaveAsync(null, k =>
+        {
+            k.Domain = "signiert.test";
+            k.Selector = "s1";
+            k.IncludeSubdomains = true;
+            k.IsEnabled = true;
+        }, (pem, publicKey, 1024)));
+        await AddRuleAsync(new Rule { Name = "Auf signiert", MatchSenders = "dkim-app.local", Action = RuleAction.Continue, RewriteFrom = "noreply@news.signiert.test" });
+
+        var mail = Mail("app@dkim-app.local", "kunde@example.test", "Mit Signatur");
+        mail.Body = new TextPart("plain") { Text = "Grüße mit Umlauten, damit der Inhalt 8 Bit hat." };
+        await SendAsync(mail);
+        await SendAsync(Mail("app@ohne-schluessel.local", "kunde@example.test", "Ohne Signatur"));
+
+        var got = await UpstreamAsync("Mit Signatur");
+        var signature = got.Message.Headers.Single(h => h.Id == HeaderId.DkimSignature);
+        Assert.Contains("d=signiert.test", signature.Value);
+        Assert.Contains("s=s1", signature.Value);
+        var verifier = new MimeKit.Cryptography.DkimVerifier(new FixedKeyLocator(MatSmtp.Core.Relay.Dkim.RecordValue(publicKey)));
+        Assert.True(await verifier.VerifyAsync(got.Message, signature), "The signature does not verify with the public key of the record.");
+
+        var message = await MessageAsync("Mit Signatur", m => m.Status == MessageStatus.Sent);
+        Assert.Contains(message.Events, e => e.Text.Contains("DKIM-signiert für signiert.test", StringComparison.Ordinal));
+        Assert.DoesNotContain((await UpstreamAsync("Ohne Signatur")).Message.Headers, h => h.Id == HeaderId.DkimSignature);
+    }
+
+    /// <summary>The public key as the DNS would have it, without asking a DNS server.</summary>
+    private sealed class FixedKeyLocator(string record) : MimeKit.Cryptography.DkimPublicKeyLocatorBase
+    {
+        public override Org.BouncyCastle.Crypto.AsymmetricKeyParameter LocatePublicKey(string methods, string domain, string selector, CancellationToken cancellationToken = default)
+            => GetPublicKey(record);
+
+        public override Task<Org.BouncyCastle.Crypto.AsymmetricKeyParameter> LocatePublicKeyAsync(string methods, string domain, string selector, CancellationToken cancellationToken = default)
+            => Task.FromResult(GetPublicKey(record));
+    }
+
+    [Fact]
     public async Task A_rule_sends_by_recipient_through_another_account()
     {
         await using var second = new FakeUpstream("relay", "geheim-2026");

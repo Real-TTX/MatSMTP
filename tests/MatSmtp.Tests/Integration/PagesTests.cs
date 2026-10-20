@@ -50,7 +50,7 @@ public sealed class PagesTests : IClassFixture<AppFixture>
             "/", "/Messages", "/Messages?status=Queued&sort=subject&dir=desc", "/Messages?zeit=24h&q=Seiten", "/Messages/Queue", $"/Messages/Details?id={message}",
             "/Rules", "/Rules?aktion=Relay", "/Rules/Edit", $"/Rules/Edit?id={rule}", $"/Rules/Edit?copy={rule}", "/RuleTest",
             "/Accounts", "/Accounts/Edit", $"/Accounts/Edit?id={account}", "/RelayUsers", "/RelayUsers/Edit", $"/RelayUsers/Edit?id={relayUser}",
-            "/Webhooks", "/Webhooks/Edit", $"/Webhooks/Edit?id={webhook}", "/Tools/Send",
+            "/Webhooks", "/Webhooks/Edit", $"/Webhooks/Edit?id={webhook}", "/Dkim", "/Dkim/Edit", "/Dkim?dns=problem&sort=used", "/Tools/Send",
             "/Admin/Smtp", "/Admin/Delivery", "/Admin/Users", "/Admin/Users/Edit", "/Admin/Shares", "/Admin/Backup", "/Admin/Backup/Plans", "/Admin/Backup/Plans/Edit",
             "/Admin/Backup/Targets", "/Admin/Backup/Targets/Edit", "/Admin/Backup/Restore", "/Admin/Security", "/Admin/Activity", "/Admin/System",
             "/Account/Profile", "/Account/Security",
@@ -73,6 +73,49 @@ public sealed class PagesTests : IClassFixture<AppFixture>
         Assert.Equal(HttpStatusCode.OK, eml.StatusCode);
         Assert.Equal("message/rfc822", eml.Content.Headers.ContentType?.MediaType);
         Assert.Contains("Subject: Seiten-Test", await eml.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task A_dkim_key_is_made_on_the_page_and_shows_the_record_for_the_dns()
+    {
+        await _app.EnsureAdminAsync();
+        using var client = _app.NewClient();
+        await AppFixture.LoginAsync(client, "admin@example.test", "Admin-Passwort-2026");
+        var domain = $"formular-{Guid.NewGuid():N}"[..16] + ".test";
+
+        var bad = await AppFixture.PostFormAsync(client, "/Dkim/Edit", new Dictionary<string, string>
+        {
+            ["Input.Domain"] = "max@" + domain, ["Input.Selector"] = "s 1", ["Input.Source"] = "Import", ["Input.PrivateKey"] = "kein Schlüssel",
+        });
+        var errors = await AppFixture.TextAsync(bad);
+        Assert.Contains("Das ist keine Domain", errors);
+        Assert.Contains("Ein Selektor besteht", errors);
+        Assert.Contains("kein privater RSA-Schlüssel", errors);
+
+        var created = await AppFixture.PostFormAsync(client, "/Dkim/Edit", new Dictionary<string, string>
+        {
+            ["Input.Domain"] = domain.ToUpperInvariant(), ["Input.Selector"] = "s1", ["Input.Source"] = "Rsa1024", ["Input.IsEnabled"] = "false",
+        });
+        Assert.Equal(HttpStatusCode.Redirect, created.StatusCode);
+        var edit = created.Headers.Location!.ToString();
+        var page = await AppFixture.TextAsync(client, edit);
+        Assert.Contains($"s1._domainkey.{domain}", page);
+        Assert.Contains("v=DKIM1; k=rsa; p=MIGfMA0", page);
+        Assert.Contains("RSA 1024 Bit", page);
+        Assert.Contains("nicht geprüft", page);
+
+        var key = await _app.WithScopeAsync(sp => sp.GetRequiredService<MsDbContext>().DkimKey.AsNoTracking().SingleAsync(k => k.Domain == domain));
+        Assert.False(key.IsEnabled);
+        Assert.DoesNotContain("PRIVATE KEY", key.PrivateKeyProtected);
+
+        var twice = await AppFixture.PostFormAsync(client, "/Dkim/Edit", new Dictionary<string, string>
+        {
+            ["Input.Domain"] = domain, ["Input.Selector"] = "S1", ["Input.Source"] = "Rsa1024",
+        });
+        Assert.Contains("schon einen Schlüssel mit diesem Selektor", await AppFixture.TextAsync(twice));
+
+        var list = await AppFixture.TextAsync(client, "/Dkim?q=" + domain[..10]);
+        Assert.Contains(domain, list);
     }
 
     [Fact]
@@ -114,7 +157,7 @@ public sealed class PagesTests : IClassFixture<AppFixture>
             Assert.Equal(HttpStatusCode.OK, (await user.GetAsync(url)).StatusCode);
         }
 
-        foreach (var url in new[] { "/Rules", "/Rules/Edit", "/Accounts", "/RelayUsers", "/Webhooks", "/Tools/Send", "/Admin/Smtp", "/Admin/Delivery", "/Admin/Users", "/Admin/Backup", "/Admin/Shares", "/Admin/System", "/Admin/Security" })
+        foreach (var url in new[] { "/Rules", "/Rules/Edit", "/Accounts", "/RelayUsers", "/Webhooks", "/Dkim", "/Dkim/Edit", "/Tools/Send", "/Admin/Smtp", "/Admin/Delivery", "/Admin/Users", "/Admin/Backup", "/Admin/Shares", "/Admin/System", "/Admin/Security" })
         {
             var status = (await user.GetAsync(url)).StatusCode;
             Assert.NotEqual(HttpStatusCode.OK, status);

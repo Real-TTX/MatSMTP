@@ -1,0 +1,88 @@
+@page
+@model MatSmtp.Pages.Dkim.EditModel
+@using MatSmtp.Core.Relay
+@using Microsoft.AspNetCore.Mvc.Rendering
+@{
+    var sources = new List<SelectListItem>
+    {
+        new("Neu erzeugen, RSA 2048 Bit (empfohlen)", nameof(DkimKeySource.Rsa2048)),
+        new("Neu erzeugen, RSA 1024 Bit", nameof(DkimKeySource.Rsa1024)),
+        new("Vorhandenen Schlüssel einfügen", nameof(DkimKeySource.Import)),
+    };
+    var item = Model.Item;
+}
+
+@if (item is { DnsState: not DkimDnsState.Ok and not DkimDnsState.Unchecked })
+{
+    <div class="mat-alert mat-alert--warning" role="status" id="dns-problem">
+        @Ui.Icon("alert")
+        <div class="mat-alert__body">
+            <strong>Der DNS-Eintrag stimmt nicht (geprüft @Fmt.Moment(item.DnsCheckedDate)).</strong>
+            <span>@item.DnsDetail</span>
+            @if (item.IsEnabled) { <span>Empfänger können die Signatur so nicht prüfen; sie zählt dann wie eine falsche.</span> }
+        </div>
+    </div>
+}
+
+<form class="mat-form" method="post" asp-page-handler="" novalidate>
+    <input type="hidden" name="Id" value="@Model.Id" />
+    <ms-summary />
+
+    <ms-card title="Domain" icon="globe">
+        <div class="mat-form__grid">
+            <ms-input for="Input.Domain" label="Domain" required="true" autocomplete="off" hint="Die Domain der Absenderadresse (From), zum Beispiel firma.de." />
+            <ms-input for="Input.Selector" label="Selektor" required="true" autocomplete="off" hint="Der Name des Schlüssels im DNS. Für einen neuen Schlüssel einen neuen Namen nehmen, dann gelten beide, bis der alte gelöscht ist." />
+            <ms-input for="Input.Description" label="Beschreibung (optional)" full="true" />
+            <ms-switch for="Input.IncludeSubdomains" label="Auch für Subdomains" full="true" hint="Signiert auch Absender wie shop.firma.de mit firma.de, wenn die Subdomain keinen eigenen Schlüssel hat. DMARC erkennt das im Modus „relaxed“ an (der übliche)." />
+            <ms-switch for="Input.IsEnabled" label="Nachrichten signieren" full="true" hint="Erst einschalten, wenn der DNS-Eintrag veröffentlicht ist und die Prüfung „DNS stimmt“ zeigt. Signiert wird beim Versand, nach allen Änderungen durch Regeln und Konten." />
+        </div>
+    </ms-card>
+
+    @if (item is null)
+    {
+        <ms-card title="Schlüssel" icon="key">
+            <div class="mat-form__grid">
+                <ms-radios for="Input.Source" label="Woher der Schlüssel kommt" items="sources" full="true" />
+                <ms-textarea for="Input.PrivateKey" label="Privater Schlüssel (PEM)" rows="8" full="true" spellcheck="false" autocomplete="off" show-if="Input.Source" show-value="Import" hint="Zum Beispiel aus dem bisherigen Mailserver: -----BEGIN RSA PRIVATE KEY----- … oder -----BEGIN PRIVATE KEY----- …. Er wird verschlüsselt gespeichert und nie wieder angezeigt." />
+            </div>
+        </ms-card>
+    }
+    else
+    {
+        <ms-card title="DNS-Eintrag" icon="network" sub="TXT">
+            <p class="mat-hint">Trage diesen Eintrag beim Anbieter der Domain ein. Manche Oberflächen wollen nur den vorderen Teil des Namens (ohne @item.Domain).</p>
+            <dl class="mat-kv">
+                <dt>Typ</dt><dd class="mat-mono">TXT</dd>
+                <dt>Name</dt>
+                <dd>
+                    <span class="mat-mono" id="dkim-name">@Model.RecordName</span>
+                    <button type="button" class="mat-btn mat-btn--ghost mat-btn--icon mat-btn--sm" data-copy="#dkim-name" aria-label="Namen kopieren" data-tip="Namen kopieren">@Ui.Icon("copy")</button>
+                </dd>
+                <dt>Wert</dt>
+                <dd>
+                    <pre class="ms-pre" id="dkim-value">@Model.RecordValue</pre>
+                    <button type="button" class="mat-btn mat-btn--secondary mat-btn--sm" data-copy="#dkim-value">@Ui.Icon("copy")<span>Wert kopieren</span></button>
+                </dd>
+                <dt>Schlüssel</dt><dd>RSA @item.KeyBits Bit, SHA-256, relaxed/relaxed</dd>
+                <dt>DNS</dt>
+                <dd>@Labels.Pill(item.DnsState)@if (item.DnsCheckedDate is { } checkedDate) { <span class="mat-muted"> geprüft @Fmt.Moment(checkedDate)</span> }</dd>
+                <dt>Zuletzt signiert</dt><dd>@(item.LastUsedDate is null ? "noch nie" : Fmt.Moment(item.LastUsedDate))</dd>
+            </dl>
+            @if (Model.RecordValue.Length > 255)
+            {
+                <p class="mat-hint">Der Wert ist länger als 255 Zeichen. Die meisten Oberflächen teilen ihn selbst auf; in einer Zonendatei steht er in mehreren Teilen in Anführungszeichen hintereinander.</p>
+            }
+        </ms-card>
+    }
+
+    @if (item is not null)
+    {
+        <ms-buttons back-href="/Dkim" delete-url="@Url.Page("/Dkim/Edit", "Delete", new { id = Model.Id })" delete-confirm="@(item.IsEnabled ? "Diesen Schlüssel löschen? Nachrichten von " + item.Domain + " gehen danach ohne diese Signatur hinaus." : "Diesen Schlüssel löschen?")">
+            <button type="submit" formnovalidate asp-page-handler="Check" class="mat-btn mat-btn--secondary">@Ui.Icon("refresh")<span>DNS prüfen</span></button>
+        </ms-buttons>
+    }
+    else
+    {
+        <ms-buttons back-href="/Dkim" save-text="Schlüssel anlegen" save-icon="key" />
+    }
+</form>

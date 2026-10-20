@@ -27,6 +27,8 @@ public class MsDbContext(DbContextOptions<MsDbContext> options, ICurrentUser cur
 
     public DbSet<Rule> Rule => Set<Rule>();
 
+    public DbSet<DkimKey> DkimKey => Set<DkimKey>();
+
     public DbSet<Message> Message => Set<Message>();
 
     public DbSet<MessageEvent> MessageEvent => Set<MessageEvent>();
@@ -95,6 +97,13 @@ public class MsDbContext(DbContextOptions<MsDbContext> options, ICurrentUser cur
             e.HasIndex(x => x.ApiId).IsUnique().HasFilter("\"UpdateState\" <> 0 AND \"ApiId\" IS NOT NULL");
         });
         b.Entity<Webhook>().HasIndex(x => x.Name);
+        b.Entity<DkimKey>(e =>
+        {
+            e.Property(x => x.Domain).UseCollation("NOCASE");
+            e.Property(x => x.Selector).UseCollation("NOCASE");
+            // A selector names one key of a domain: two keys with the same name could not both be in the DNS.
+            e.HasIndex(x => new { x.Domain, x.Selector }).IsUnique().HasFilter("\"UpdateState\" <> 0");
+        });
         b.Entity<Rule>(e =>
         {
             e.HasIndex(x => x.Position);

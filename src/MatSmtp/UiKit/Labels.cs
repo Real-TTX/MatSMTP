@@ -87,6 +87,16 @@ public static class Labels
         _ => Ui.Pill("Ausstehend", "info", "clock"),
     };
 
+    public static IHtmlContent Pill(DkimDnsState s) => s switch
+    {
+        DkimDnsState.Ok => Ui.Pill("DNS stimmt", "ok", "check"),
+        DkimDnsState.Missing => Ui.Pill("DNS fehlt", "error", "x-circle"),
+        DkimDnsState.Different => Ui.Pill("DNS anders", "error", "alert"),
+        DkimDnsState.Revoked => Ui.Pill("DNS leer", "error", "ban"),
+        DkimDnsState.Error => Ui.Pill("DNS-Fehler", "warn", "alert"),
+        _ => Ui.Pill("nicht geprüft", "plain", "help-circle"),
+    };
+
     public static string Tone(EventLevel l) => l switch
     {
         EventLevel.Success => "ok",

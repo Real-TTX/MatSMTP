@@ -111,6 +111,7 @@ public sealed class ShellFactory(ICurrentUser user, NavCounts counts, IHttpConte
                 new("SMTP-Konten", "/Accounts", "server"),
                 new("Zugänge", "/RelayUsers", "key"),
                 new("Webhooks", "/Webhooks", "plug"),
+                new("DKIM", "/Dkim", "shield-check"),
             ]));
             groups.Add(new NavGroup("Werkzeuge",
             [

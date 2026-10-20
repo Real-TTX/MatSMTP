@@ -1,0 +1,11 @@
+@page
+@model MatSmtp.Pages.Dkim.IndexModel
+
+<div class="mat-list">
+    <partial name="_Toolbar" model="Model.Toolbar" />
+    <partial name="_Table" model="Model.Table" />
+    <partial name="_Pager" model="Model.Pager" />
+    <div class="mat-actions">
+        <a class="mat-btn mat-btn--primary" href="/Dkim/Edit">@Ui.Icon("plus")<span>Neuer Schlüssel</span></a>
+    </div>
+</div>
