@@ -96,6 +96,12 @@ Fields that do not apply to the chosen action stay hidden.
 |---|---|---|
 | ![An SMTP account with server, sign-in and limits](docs/images/account-edit.png) | ![The relay users](docs/images/relayusers.png) | ![A webhook with payload, signature and sample](docs/images/webhook-edit.png) |
 
+### DKIM
+
+| The keys of the sender domains | A key and its DNS record |
+|---|---|
+| ![The DKIM keys: domain, selector, DNS state, whether it signs](docs/images/dkim.png) | ![The TXT record to copy, the DNS state and when it last signed](docs/images/dkim-edit.png) |
+
 ### Receiving, delivery and backup
 
 | Receiving (ports, networks, certificate) | Delivery (retries, retention) | Backup target on a NAS |

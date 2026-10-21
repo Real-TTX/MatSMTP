@@ -92,6 +92,18 @@ function smtp(from, to, subject, port = 2025, extra = []) {
     await page.selectOption('[name="Input.Payload"]', 'Content');
     await save(page);
 
+    // DKIM: a signing key for the domain the shop rule rewrites to, and a second one that waits for its DNS record
+    await page.goto(base + '/Dkim/Edit');
+    await page.fill('[name="Input.Domain"]', 'example.com');
+    await page.fill('[name="Input.Description"]', 'Shop und Newsletter');
+    await sw(page, 'Input.IncludeSubdomains', true);
+    await sw(page, 'Input.IsEnabled', true);
+    await save(page);
+    await page.goto(base + '/Dkim/Edit');
+    await page.fill('[name="Input.Domain"]', 'example.org');
+    await page.fill('[name="Input.Description"]', 'Neue Domain, DNS-Eintrag folgt');
+    await save(page);
+
     // rules
     const rule = async (f) => { await page.goto(base + '/Rules/Edit'); await f(); await save(page); };
     await rule(async () => {
@@ -122,9 +134,10 @@ function smtp(from, to, subject, port = 2025, extra = []) {
       await page.fill('[name="Input.RejectMessage"]', 'An Testdomains wird nicht versendet.');
     });
 
-    // The host reaches the dev stack through the Docker gateway: only here the private range may relay without signing in.
+    // The host reaches the dev stack through the Docker gateway (Docker's range, or the gateway of the explicit subnet 10.253.x.0/24): only here the private
+    // ranges may relay without signing in.
     await page.goto(base + '/Admin/Smtp');
-    await page.fill('[name="Input.TrustedNetworks"]', '127.0.0.0/8\n::1/128\n172.16.0.0/12');
+    await page.fill('[name="Input.TrustedNetworks"]', '127.0.0.0/8\n::1/128\n172.16.0.0/12\n10.253.0.0/16');
     await save(page);
 
     // mails over real SMTP
@@ -146,7 +159,7 @@ function smtp(from, to, subject, port = 2025, extra = []) {
   const pages = [
     ['dashboard', '/'], ['messages', '/Messages'], ['queue', '/Messages/Queue'], ['message', '/Messages/Details?id=' + first],
     ['rules', '/Rules'], ['rule-edit', '/Rules/Edit?id=1'], ['rule-test', '/RuleTest'], ['accounts', '/Accounts'], ['account-edit', '/Accounts/Edit?id=1'],
-    ['relayusers', '/RelayUsers'], ['webhooks', '/Webhooks'], ['webhook-edit', '/Webhooks/Edit?id=1'], ['tools-send', '/Tools/Send'],
+    ['relayusers', '/RelayUsers'], ['webhooks', '/Webhooks'], ['webhook-edit', '/Webhooks/Edit?id=1'], ['dkim', '/Dkim'], ['tools-send', '/Tools/Send'],
     ['admin-smtp', '/Admin/Smtp'], ['admin-delivery', '/Admin/Delivery'], ['admin-backup', '/Admin/Backup'], ['admin-backup-targets', '/Admin/Backup/Targets/Edit'],
     ['admin-backup-plans', '/Admin/Backup/Plans/Edit'], ['admin-users', '/Admin/Users'], ['admin-shares', '/Admin/Shares'], ['admin-system', '/Admin/System'],
     ['admin-activity', '/Admin/Activity'], ['account-security', '/Account/Security'],
@@ -158,6 +171,11 @@ function smtp(from, to, subject, port = 2025, extra = []) {
     if (!r.ok()) problems.push(`${r.status()} ${url}`);
     await page.screenshot({ path: path.join(dir, name + '.png'), fullPage: !out });
   }
+
+  // the record of a DKIM key, which is what the page is for
+  await page.goto(base + '/Dkim/Edit?id=1', { waitUntil: 'networkidle' });
+  await page.locator('.mat-card:has(h2:has-text("DNS-Eintrag"))').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: path.join(dir, 'dkim-edit.png'), fullPage: !out });
 
   // a share link (anonymous view)
   await page.goto(base + '/Messages/Details?id=' + first, { waitUntil: 'networkidle' });
