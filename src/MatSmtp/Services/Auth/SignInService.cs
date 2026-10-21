@@ -21,6 +21,9 @@ public enum SignInOutcome
 
 public sealed record SignInResult(SignInOutcome Outcome, User? User = null, DateTime? LockedUntil = null);
 
+/// <summary>The sessions of one user that a back-channel logout of MatIdentity ended.</summary>
+public sealed record EndedSessions(long UserId, string DisplayName, string Email, UserRole Role, int Count);
+
 /// <summary>
 /// Credentials, lock-out and sessions. A session is a row of <see cref="UserSession"/>; the cookie only names it.
 /// <b>Nothing but the sign-in pages decides that the second step happened</b> (<see cref="StartSessionAsync"/> does not check it):
@@ -95,8 +98,11 @@ public sealed class SignInService(MsDbContext db, ConfigStore config, TimeProvid
 
     public bool IsLockedOut(User user) => user.LockoutEndDate > clock.GetUtcNow().UtcDateTime;
 
-    /// <summary>Opens a session and signs the browser in. <paramref name="idToken"/>: the ID token of a sign-in through MatIdentity, kept for the sign-out there.</summary>
-    public async Task<UserSession> StartSessionAsync(HttpContext http, User user, CancellationToken ct = default, string? idToken = null)
+    /// <summary>
+    /// Opens a session and signs the browser in. <paramref name="idToken"/>: the ID token of a sign-in through MatIdentity, kept for the sign-out there;
+    /// <paramref name="identitySessionId"/>: its session at MatIdentity (<c>sid</c>), for the back-channel logout.
+    /// </summary>
+    public async Task<UserSession> StartSessionAsync(HttpContext http, User user, CancellationToken ct = default, string? idToken = null, string? identitySessionId = null)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         var session = new UserSession
@@ -108,6 +114,7 @@ public sealed class SignInService(MsDbContext db, ConfigStore config, TimeProvid
             IpAddress = http.Connection.RemoteIpAddress?.ToString(),
             UserAgent = Truncate(http.Request.Headers.UserAgent.ToString(), 300),
             IdToken = string.IsNullOrEmpty(idToken) ? null : idToken,
+            IdentitySessionId = string.IsNullOrEmpty(identitySessionId) ? null : identitySessionId,
         };
         db.UserSession.Add(session);
         user.LastLoginDate = now;
@@ -194,6 +201,63 @@ public sealed class SignInService(MsDbContext db, ConfigStore config, TimeProvid
 
         await db.SaveChangesAsync(ct);
         cache.InvalidateUser(userId);
+    }
+
+    /// <summary>
+    /// The back-channel logout of MatIdentity: <paramref name="identitySessionId"/> set ends the sessions that started with that <c>sid</c> (of the user
+    /// linked to <paramref name="subject"/> when it is named too); <paramref name="subject"/> alone ends every session of the user linked to it. A subject
+    /// or sid that is not known ends nothing. Answers the users whose sessions ended, with how many.
+    /// </summary>
+    public async Task<IReadOnlyList<EndedSessions>> EndIdentitySessionsAsync(string? subject, string? identitySessionId, CancellationToken ct = default)
+    {
+        subject = string.IsNullOrWhiteSpace(subject) ? null : subject.Trim();
+        identitySessionId = string.IsNullOrWhiteSpace(identitySessionId) ? null : identitySessionId;
+        if (subject is null && identitySessionId is null)
+        {
+            return [];
+        }
+
+        var query = db.UserSession.Where(s => s.RevokedDate == null);
+        if (subject is not null)
+        {
+            // Also a deleted user: its subject stays with it (UserService.SignInExternalAsync).
+            var userId = await db.User.IgnoreQueryFilters().Where(u => u.ExternalSubject == subject).Select(u => (long?)u.Id).FirstOrDefaultAsync(ct);
+            if (userId is not { } id)
+            {
+                return [];
+            }
+
+            query = query.Where(s => s.UserId == id);
+        }
+
+        if (identitySessionId is not null)
+        {
+            query = query.Where(s => s.IdentitySessionId == identitySessionId);
+        }
+
+        var sessions = await query.ToListAsync(ct);
+        if (sessions.Count == 0)
+        {
+            return [];
+        }
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        foreach (var session in sessions)
+        {
+            session.RevokedDate = now;
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        var ended = new List<EndedSessions>();
+        foreach (var group in sessions.GroupBy(s => s.UserId))
+        {
+            cache.InvalidateUser(group.Key);
+            var user = await db.User.IgnoreQueryFilters().AsNoTracking().FirstAsync(u => u.Id == group.Key, ct);
+            ended.Add(new EndedSessions(user.Id, user.DisplayName, user.Email, user.Role, group.Count()));
+        }
+
+        return ended;
     }
 
     /// <summary>Writes the claims again (the display name or the theme changed) without a new session.</summary>

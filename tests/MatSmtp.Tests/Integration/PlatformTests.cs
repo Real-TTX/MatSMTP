@@ -34,7 +34,7 @@ public sealed class PlatformTests(AppFixture app) : IClassFixture<AppFixture>
         Assert.Equal(["admin", "user"], definition.Roles!.Select(r => r.Key).ToArray());
 
         // All engines on one copy of the package.
-        Assert.Equal("1.3.0", MatPlatformInfo.Version);
+        Assert.Equal("1.4.0", MatPlatformInfo.Version);
     }
 
     [Fact]

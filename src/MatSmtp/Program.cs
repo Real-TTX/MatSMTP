@@ -238,6 +238,7 @@ app.Use(async (context, next) =>
         && !path.Value!.EndsWith(".svg", StringComparison.OrdinalIgnoreCase) && !path.Value.EndsWith(".webmanifest", StringComparison.OrdinalIgnoreCase)
         && path.Value != "/sw.js"
         && !path.StartsWithSegments(MatIdentitySignIn.CallbackPath) && !path.StartsWithSegments(MatIdentitySignIn.SignedOutCallbackPath)
+        && !path.StartsWithSegments(MatIdentitySignIn.BackchannelLogoutPath)
         && !await context.RequestServices.GetRequiredService<SetupState>().IsDoneAsync(context.RequestServices, context.RequestAborted))
     {
         context.Response.Redirect("/Account/Setup");

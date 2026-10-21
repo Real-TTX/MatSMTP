@@ -83,6 +83,7 @@ public class MsDbContext(DbContextOptions<MsDbContext> options, ICurrentUser cur
         {
             e.HasIndex(x => x.Token).IsUnique();
             e.HasIndex(x => x.UserId);
+            e.HasIndex(x => x.IdentitySessionId);
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 

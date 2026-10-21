@@ -829,6 +829,9 @@ namespace MatSmtp.Data.Migrations
                     b.Property<string>("IdToken")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("IdentitySessionId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("IpAddress")
                         .HasColumnType("TEXT");
 
@@ -854,6 +857,8 @@ namespace MatSmtp.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IdentitySessionId");
 
                     b.HasIndex("Token")
                         .IsUnique();

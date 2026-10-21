@@ -139,20 +139,22 @@ public sealed class LoginModel(SignInService signIn, UserService users, TwoFacto
 
     /// <summary>
     /// Opens the session of a local sign-in that passed every step. A pending link of MatIdentity is only ever for the account that matched (and is deleted
-    /// either way): that account gets the subject, the role of the claim and the ID token with its session.
+    /// either way): that account gets the subject, the role of the claim and the ID token and the <c>sid</c> with its session.
     /// </summary>
     public static async Task CompleteAsync(HttpContext http, Data.Entities.User user, UserService users, SignInService signIn, ActivityLogger log, string action)
     {
         string? idToken = null;
+        string? identitySessionId = null;
         if (MatIdentityPendingLink.TakeFor(http, user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)) is { } pending
             && await users.LinkExternalAsync(user.Id, SmtpIdentityUsers.ToIdentity(pending), http.RequestAborted) is { } linked)
         {
             user = linked;
             idToken = pending.IdToken;
+            identitySessionId = pending.SessionId;
             await log.LogAsync("Mit MatIdentity verbunden", "User", user.Id, user.Email);
         }
 
-        await signIn.StartSessionAsync(http, user, http.RequestAborted, idToken);
+        await signIn.StartSessionAsync(http, user, http.RequestAborted, idToken, identitySessionId);
         await log.LogAsync(action, "User", user.Id, user.Email);
     }
 

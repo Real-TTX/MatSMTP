@@ -322,10 +322,13 @@ the shared package MatPlatform, copied to `src/MatSmtp/MatPlatform/`), so Mattiv
 | `POST /api/actions/{id}` | the same | `flushDeferred` (send what is deferred now), `retryFailed` (failed messages of the last 24 hours back into the queue), `testAccount` (connect to the default account and sign in, nothing is sent); links to the app, the messages, the queue and the accounts |
 
 **Sign-in through MatIdentity.** With `MATIDENTITY_AUTHORITY` set, a visitor who is not signed in goes straight to MatIdentity (OpenID Connect, code with
-PKCE) and comes back signed in; the redirect address is `/signin-oidc`, the signed-out address `/signout-callback-oidc`. The local sign-in (with its
+PKCE) and comes back signed in; the redirect address is `/signin-oidc`, the signed-out address `/signout-callback-oidc`, the back-channel logout `/signout-backchannel`. The local sign-in (with its
 authenticator app) stays at `/Account/Login?local=1`. A person is matched by `sub`; the first sign-in creates the user; the claim `role` (`admin`, `user`)
 sets the role. An account of MatSMTP with the person's address is **not** linked by the address: the sign-in page asks once for that account's password
-(and its code), then links it; cancel or another account links nothing. Signing out ends the session at MatIdentity too.
+(and its code), then links it; cancel or another account links nothing. Signing out ends the session at MatIdentity too; signing out at MatIdentity (or an
+administrator ending the person's sessions there) ends the MatSMTP sessions too: MatIdentity posts a signed logout token to `/signout-backchannel`
+(MatPlatform 1.4.0), MatSMTP revokes the sessions that started with its `sid` (or, with `sub` alone, every session of that person), and their next
+request lands on the sign-in page. The activity log says so ("Abmeldung über MatIdentity").
 
 ## Development
 

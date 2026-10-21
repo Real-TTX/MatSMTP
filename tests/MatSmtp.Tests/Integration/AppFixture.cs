@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using MatPlatform;
 using MatSmtp.Api;
@@ -13,6 +14,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -37,6 +39,9 @@ public class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
 
     /// <summary><c>MATSMTP_ADMIN_PASSWORD</c> of this fixture: a headless installation.</summary>
     protected virtual string? AdminPassword => null;
+
+    /// <summary>The key MatIdentity signs with in the tests (made here, no network): it is in the keys of the fixed OpenID configuration.</summary>
+    public static readonly SigningCredentials IdentityKey = new(new RsaSecurityKey(RSA.Create(2048)) { KeyId = "test-key" }, SecurityAlgorithms.RsaSha256);
 
     /// <summary><c>MATIDENTITY_AUTHORITY</c> of this fixture: the sign-in through MatIdentity (one that does not need to run).</summary>
     protected virtual string? Authority => null;
@@ -96,6 +101,7 @@ public class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
             TokenEndpoint = authority + "/connect/token",
             EndSessionEndpoint = authority + "/connect/logout",
         };
+        configuration.SigningKeys.Add(IdentityKey.Key);
         builder.ConfigureTestServices(services =>
         {
             services.PostConfigure<OpenIdConnectOptions>(MatIdentitySignIn.Scheme, options =>

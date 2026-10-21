@@ -94,4 +94,10 @@ public class UserSession : AuditedEntity
 
     /// <summary>The ID token of a sign-in through MatIdentity: the hint for the sign-out there. Null for a local sign-in.</summary>
     public string? IdToken { get; set; }
+
+    /// <summary>
+    /// The session at MatIdentity this one started with (the claim <c>sid</c>): a back-channel logout that names it ends this session. Null for a local
+    /// sign-in, or when MatIdentity sent none.
+    /// </summary>
+    public string? IdentitySessionId { get; set; }
 }

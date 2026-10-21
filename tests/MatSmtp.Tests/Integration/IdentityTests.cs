@@ -195,8 +195,8 @@ public sealed class IdentityTests(IdentityFixture app) : IClassFixture<IdentityF
 
     private Task<int> CountUsersAsync() => app.WithScopeAsync(sp => sp.GetRequiredService<MsDbContext>().User.CountAsync());
 
-    /// <summary>A browser with its own cookies; the callback of MatIdentity runs in the app's services and its cookies are handed over.</summary>
-    private sealed class Browser
+    /// <summary>A browser with its own cookies; the callback of MatIdentity runs in the app's services and its cookies are handed over (also for <see cref="BackchannelLogoutTests"/>).</summary>
+    internal sealed class Browser
     {
         private static readonly Uri Base = new("http://localhost");
         private readonly IdentityFixture _site;
