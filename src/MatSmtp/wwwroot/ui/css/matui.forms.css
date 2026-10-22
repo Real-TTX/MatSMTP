@@ -316,10 +316,25 @@ input[type="file"].mat-input { padding: 6px; }
 .mat-input-group--sm .mat-input, .mat-input-group--sm .mat-select, .mat-input-group--sm .mat-btn, .mat-input-group--sm .mat-input-addon { min-height: var(--mat-control-h-sm); font-size: var(--mat-fs-sm); }
 .mat-input-group--lg .mat-input, .mat-input-group--lg .mat-select, .mat-input-group--lg .mat-btn, .mat-input-group--lg .mat-input-addon { min-height: var(--mat-control-h-lg); font-size: var(--mat-fs-lg); }
 
+/* ---- The type of a field on a touch screen (MOBILE-06) ----
+   iOS Safari zooms into a field whose type is under 16 px when it takes the focus, and the page stays zoomed. So on a touch screen every field has 16 px type or more; with a mouse nothing changes.
+   A field takes the size of what it stands in (15 px in the body), so max(1rem, 1em) never makes one smaller than its context gave it. The small size is raised to 16 px as well (its 36 px height
+   stays), the large one keeps 17 px. This block stands after the sizes of the field, of the input group and of the stepper, whose rules have the same weight. The fields that the script draws have
+   their rules next to them: the search field and the tags in matui.pickers.css, the field of a row in matui.lists.css. */
+@media (pointer: coarse) {
+  .mat-input, .mat-select, .mat-textarea { font-size: max(1rem, 1em); }
+  .mat-input--sm, .mat-select--sm, .mat-input-group--sm .mat-input, .mat-input-group--sm .mat-select { font-size: 1rem; }
+  .mat-input--lg, .mat-select--lg, .mat-input-group--lg .mat-input, .mat-input-group--lg .mat-select { font-size: max(1rem, var(--mat-fs-lg)); }
+  /* the buttons and the unit of a number stepper are in the size of its field */
+  .mat-stepper:has(> .mat-input--sm) { font-size: 1rem; }
+  .mat-stepper:has(> .mat-input--lg) { font-size: max(1rem, var(--mat-fs-lg)); }
+}
+
 /* ---- An icon in the field (search), a button in the field (show the password), a counter ---- */
 .mat-input-icon { position: relative; display: flex; align-items: center; }
 .mat-input-icon > .mat-icon { position: absolute; left: var(--mat-space-3); font-size: 1.1rem; color: var(--mat-text-muted); pointer-events: none; }
-.mat-input-icon > .mat-input { padding-left: calc(var(--mat-space-3) + 1.6rem); }
+/* room at the start only for an icon that stands there: the eye of a password field is at the end and the field starts like every field */
+.mat-input-icon > .mat-input:where(.mat-icon ~ .mat-input) { padding-left: calc(var(--mat-space-3) + 1.6rem); }
 .mat-input-icon--end > .mat-input { padding-right: 48px; }
 .mat-input-icon__btn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); }
 .mat-toggle-off { display: none; }

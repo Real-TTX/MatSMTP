@@ -9,7 +9,7 @@
 .mat-list { display: flex; flex-direction: column; gap: var(--mat-space-4); min-width: 0; }
 .mat-list > .mat-toolbar { order: 0; }
 .mat-list > .mat-chips { order: 1; }
-.mat-list > .mat-table-wrap, .mat-list > .mat-gallery { order: 2; }
+.mat-list > .mat-table-wrap, .mat-list > .mat-gallery, .mat-list > .mat-itemlist { order: 2; }
 .mat-list > .mat-empty { order: 3; }
 .mat-list > .mat-pager { order: 4; }
 .mat-list > .mat-actions { order: 5; }
@@ -41,7 +41,15 @@
 @media (max-width: 480px) {
   .mat-toolbar__btn small { display: none; }
   .mat-toolbar__info { width: 100%; padding: 0 var(--mat-space-2); order: 9; }
-  .mat-toolbar__search { flex-basis: 100%; max-width: none; }
+  /* On a phone a toolbar with a search field is one row, like the search bar of a phone app: the field takes the room and the buttons at its right end
+     are icons only (their name stays for screen readers, the number of filters is a badge on the icon); the count goes under the row. */
+  .mat-toolbar__search { flex: 1 1 0; max-width: none; }
+  .mat-toolbar__search ~ .mat-toolbar__spacer { display: none; }
+  .mat-toolbar:has(> .mat-toolbar__search) .mat-toolbar__btn:has(> .mat-icon) { position: relative; padding: 0; width: var(--mat-btn-height, var(--mat-control-h)); }
+  .mat-toolbar:has(> .mat-toolbar__search) .mat-toolbar__btn:has(> .mat-icon) > span:not(.mat-badge) {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .mat-toolbar:has(> .mat-toolbar__search) .mat-toolbar__btn > .mat-badge { position: absolute; top: -4px; right: -4px; box-shadow: 0 0 0 2px var(--mat-surface); }
 }
 
 /* ---- Table ---- */
@@ -93,6 +101,9 @@
 .mat-table__name .mat-muted { font-weight: 400; } /* a part of the name that the group already says: .example.org after app */
 .mat-table__actions { display: flex; justify-content: flex-end; gap: var(--mat-space-1); }
 .mat-table td.mat-table__cell-actions { width: 1%; white-space: nowrap; }
+/* A table that is wider than its frame above 720 px leaves out the columns the phone leaves out (mat-hide-sm), the last one first, until it fits (TABLE-02,
+   the script marks their cells is-col-hidden); it scrolls sideways only with data-table-scroll on the frame (TABLE-04: a table that cannot become cards). */
+.mat-table .is-col-hidden { display: none; }
 
 /* Under 720 px a row becomes a card; every <td> needs data-label for that (RULE TABLE-02). */
 @media (max-width: 720px) {
@@ -101,13 +112,66 @@
   .mat-table tr { padding: var(--mat-table-pad-y, var(--mat-space-3)) var(--mat-table-pad-x, var(--mat-space-4)); border-top: 1px solid var(--mat-border); }
   .mat-table tbody tr:first-child { border-top: 0; }
   .mat-table td { display: flex; align-items: baseline; justify-content: space-between; gap: var(--mat-space-4); padding: var(--mat-space-1) 0; border: 0; text-align: right; }
-  .mat-table td::before { content: attr(data-label); flex: none; color: var(--mat-text-muted); font-size: var(--mat-fs-sm); font-weight: 500; text-align: left; }
+  .mat-table td::before { content: attr(data-label); flex: none; color: var(--mat-text-muted); font-family: var(--mat-font); font-size: var(--mat-fs-sm); font-weight: 500; text-align: left; }
   .mat-table td:not([data-label])::before, .mat-table td[data-label=""]::before { content: none; }
   .mat-table td.mat-table__cell-actions { width: 100%; }
   .mat-table td .mat-table__name { text-align: left; }
   /* The check of a selectable row is the first thing of its card, without a label (it has an accessible name of its own). */
   .mat-table td.mat-table__select { width: 100%; justify-content: flex-start; }
   .mat-table td.mat-table__select::before { content: none; }
+  /* The card of a row with actions reads like a phone list: its first cell (the name) is the title, without its label, and the actions stand at its right
+     end in the same line; the other cells follow under it with their labels. A grouped table and a selectable row keep the plain card. */
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__cell-actions):not(:has(> td.mat-table__select, > td.mat-table__primary)) {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: var(--mat-space-3); align-items: center;
+  }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__cell-actions):not(:has(> td.mat-table__select, > td.mat-table__primary)) > td { grid-column: 1 / -1; }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__cell-actions):not(:has(> td.mat-table__select, > td.mat-table__primary)) > td:first-child {
+    grid-column: 1; grid-row: 1; justify-content: flex-start; font-weight: 600; text-align: left;
+  }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__cell-actions):not(:has(> td.mat-table__select, > td.mat-table__primary)) > td:first-child::before { content: none; }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__cell-actions):not(:has(> td.mat-table__select, > td.mat-table__primary)) > td.mat-table__cell-actions { grid-column: 2; grid-row: 1; width: auto; padding: 0; }
+  /* A record card (TABLE-02): a row whose primary cell (mat-table__primary, the name that opens the record) is marked. The primary cell is the title with a
+     chevron, and its link covers the whole card, so a tap anywhere opens the record. The other cells follow in one flowing line, without their labels on the
+     screen (a screen reader still reads them); the actions stand in a row of their own below, each with its text (the data-tip of an icon button).
+     Links and buttons in the other cells stay above the covering link. A grouped table and a selectable row keep the plain card. */
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) {
+    position: relative; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--mat-space-3); row-gap: var(--mat-space-1);
+  }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) > td {
+    display: block; width: auto; min-width: 0; padding: 0; text-align: left; color: var(--mat-text-muted);
+  }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) > td:empty { display: none; }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) > td::before {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  /* a value that says nothing without its column (an open sum, the next date) keeps its label in front of it: mat-table__keep-label */
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) > td.mat-table__keep-label::before {
+    position: static; width: auto; height: auto; overflow: visible; clip-path: none; margin-right: var(--mat-space-1);
+  }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) > td.mat-table__primary {
+    order: -1; flex: 1 1 100%; color: var(--mat-text); font-size: var(--mat-fs-md); font-weight: 600;
+  }
+  /* the chevron has a column of its own on the right: no cell of the card runs into it */
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary a[href]):not(:has(> td.mat-table__select)) { padding-right: calc(var(--mat-table-pad-x, var(--mat-space-4)) + var(--mat-space-6)); }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) > td.mat-table__primary::before { content: none; }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary a[href]):not(:has(> td.mat-table__select)) > td.mat-table__primary::after {
+    content: ""; position: absolute; top: 50%; right: var(--mat-table-pad-x, var(--mat-space-4)); width: .5rem; height: .5rem;
+    border-right: 2px solid var(--mat-text-faint); border-bottom: 2px solid var(--mat-text-faint); translate: 0 -50%; rotate: -45deg; pointer-events: none;
+  }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) > td.mat-table__primary a[href] { color: inherit; text-decoration: none; }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) > td.mat-table__primary a[href]::after { content: ""; position: absolute; inset: 0; }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) > td:not(.mat-table__primary) :is(a[href], button, input, select, textarea, label, summary) {
+    position: relative; z-index: 1;
+  }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) > td.mat-table__cell-actions { order: 1; flex: 1 1 100%; padding-top: var(--mat-space-1); }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) .mat-table__actions { justify-content: flex-start; flex-wrap: wrap; gap: var(--mat-space-2); margin-left: calc(var(--mat-space-3) * -1); }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) .mat-table__actions .mat-btn--icon[data-tip] {
+    width: auto; padding: 0 var(--mat-space-3); gap: var(--mat-space-2);
+  }
+  .mat-table > tbody:not(.mat-group) > tr:has(> td.mat-table__primary):not(:has(> td.mat-table__select)) .mat-table__actions .mat-btn--icon[data-tip]::after {
+    content: attr(data-tip); display: inline; position: static; translate: none; padding: 0; border-radius: 0;
+    background: none; color: inherit; font-size: var(--mat-fs-sm); font-weight: 600; opacity: 1; z-index: auto;
+  }
 }
 
 /* ---- Groups in a table (LIST-16): rows under a heading that opens and closes. The items hang on a line below the heading, and the action that adds one
@@ -195,11 +259,12 @@ a.mat-tile:hover { border-color: var(--mat-text-faint); background: var(--mat-su
 /* @prop tabs | --mat-tabs-gap | length | var(--mat-space-1) | Space between two tabs. */
 /* @prop tabs | --mat-tabs-indicator-width | length | 2px | Thickness of the line under the current tab. */
 /* @prop tabs | --mat-tabs-font-weight | number | 600 | Weight of the letters of a tab. */
-.mat-tabs { display: flex; gap: var(--mat-tabs-gap, var(--mat-space-1)); border-bottom: 1px solid var(--mat-border); overflow-x: auto; }
+/* The line under the tabs is an inset shadow inside the bar, not a border below it: the line under the current tab lies on it without a negative margin, so the bar,
+   which scrolls sideways on a narrow screen (overflow-x), has nothing that stands out of it below and never scrolls up and down (overflow-y: hidden). */
+.mat-tabs { display: flex; gap: var(--mat-tabs-gap, var(--mat-space-1)); box-shadow: inset 0 -1px 0 var(--mat-border); overflow-x: auto; overflow-y: hidden; }
 .mat-tab {
   display: inline-flex; align-items: center; gap: var(--mat-space-2);
   min-height: var(--mat-tabs-height, var(--mat-control-h)); padding: 0 var(--mat-tabs-pad-x, var(--mat-space-4));
-  margin-bottom: -1px;
   border: 0; border-bottom: var(--mat-tabs-indicator-width, 2px) solid transparent; border-radius: 0;
   background: transparent; color: var(--mat-text-muted);
   font-weight: var(--mat-tabs-font-weight, 600); white-space: nowrap; cursor: pointer; text-decoration: none;
@@ -310,11 +375,11 @@ th[aria-sort="descending"] .mat-icon { transform: rotate(180deg); }
 [data-select-item].is-selected { background: var(--mat-accent-soft); border-color: var(--mat-accent); }
 
 /* ---- Pills and vertical tabs; tabs that fill the width ---- */
-.mat-tabs--pills { gap: var(--mat-space-2); border-bottom: 0; }
+.mat-tabs--pills { gap: var(--mat-space-2); box-shadow: none; }
 .mat-tabs--pills .mat-tab { margin-bottom: 0; border-bottom: 0; border-radius: var(--mat-radius-pill); min-height: var(--mat-control-h-sm); padding-inline: var(--mat-space-4); }
 .mat-tabs--pills .mat-tab:hover { background: var(--mat-accent-soft); }
 .mat-tabs--pills .mat-tab[aria-selected="true"], .mat-tabs--pills .mat-tab.is-active { background: var(--mat-accent-soft-strong); }
-.mat-tabs--vertical { flex-direction: column; gap: 2px; border-bottom: 0; border-right: 1px solid var(--mat-border); padding-right: var(--mat-space-3); overflow: visible; }
+.mat-tabs--vertical { flex-direction: column; gap: 2px; box-shadow: none; border-right: 1px solid var(--mat-border); padding-right: var(--mat-space-3); overflow: visible; }
 .mat-tabs--vertical .mat-tab { margin-bottom: 0; justify-content: flex-start; border-bottom: 0; border-radius: var(--mat-radius-sm); }
 .mat-tabs--vertical .mat-tab:hover { background: var(--mat-surface-3); }
 .mat-tabs--vertical .mat-tab[aria-selected="true"], .mat-tabs--vertical .mat-tab.is-active { background: var(--mat-accent-soft-strong); }
@@ -441,6 +506,8 @@ a.mat-item__main:active, button.mat-item__main:active, label.mat-item__main:acti
 .mat-item__input::placeholder { color: var(--mat-text-faint); }
 select.mat-item__input { width: calc(100% + 4px); margin-left: -4px; cursor: pointer; }
 .mat-item__input:focus-visible { box-shadow: none; }
+/* the type of a field on a touch screen is 16 px or more (MOBILE-06, matui.forms.css); this one has `font: inherit` and so its own rule */
+@media (pointer: coarse) { .mat-item__input { font-size: max(1rem, 1em); } }
 @media (min-width: 480px) {
   .mat-item--inline .mat-item__body { flex-direction: row; align-items: center; gap: var(--mat-item-gap); }
   .mat-item--inline .mat-item__label { flex: 0 0 7rem; color: var(--mat-text); font-size: var(--mat-fs-md); }

@@ -238,6 +238,122 @@
 .mat-picker__chips .mat-btn.is-active { background: var(--mat-accent-soft-strong); border-color: var(--mat-accent); color: var(--mat-accent-text); }
 .mat-time__entry[aria-invalid="true"], .mat-colour__hex[aria-invalid="true"] { border-color: var(--mat-danger); }
 
+/* ---- Search with suggestions (FORM-23, SHELL-20) ----
+   A search field with a magnifier at its left and a clear button at its right, and a popup under it: the list of a combobox, drawn like the panels of the pickers (fixed, a line, a shadow).
+   The input is a real one: without the script it is a plain search field in a form. The active option is a tint behind the whole row (COLOR-08), the part of a title that matches is
+   bold and in the colour of a link, never a colour alone (COLOR-04). On a phone the focused field is a full-screen panel: the field and the X on top, the suggestions below. */
+/* @prop search | --mat-search-radius | length | var(--mat-radius) | Corner radius of a search field. */
+/* @prop search | --mat-search-height | length | var(--mat-control-h) | Least height of a search field. A floor: on a touch screen keep it at 44 px or more (MOBILE-04). */
+.mat-search { position: relative; display: block; min-width: 0; width: 100%; }
+.mat-search__bar { display: flex; align-items: center; gap: var(--mat-space-2); min-width: 0; }
+.mat-search__field { position: relative; flex: 1 1 auto; display: flex; align-items: center; min-width: 0; }
+.mat-search__input {
+  width: 100%; min-width: 0;
+  min-height: var(--mat-search-height, var(--mat-control-h));
+  padding: 0 var(--mat-input-pad-x, var(--mat-space-3));
+  background: var(--mat-surface); color: var(--mat-text);
+  border: var(--mat-input-border-width, 1px) solid var(--mat-border-strong);
+  border-radius: var(--mat-search-radius, var(--mat-radius));
+  font: inherit;
+  appearance: none; -webkit-appearance: none;
+  transition: border-color var(--mat-dur-fast) var(--mat-ease), box-shadow var(--mat-dur-fast) var(--mat-ease);
+}
+.mat-search__input::placeholder { color: var(--mat-text-faint); }
+.mat-search__input:hover { border-color: color-mix(in srgb, var(--mat-accent) 40%, var(--mat-border-strong)); }
+.mat-search__input:focus { border-color: var(--mat-accent); box-shadow: var(--mat-focus-ring); outline: none; }
+.mat-search__input:disabled { background: var(--mat-surface-3); color: var(--mat-text-muted); cursor: not-allowed; }
+.mat-search__input::-webkit-search-decoration, .mat-search__input::-webkit-search-cancel-button { appearance: none; -webkit-appearance: none; display: none; }
+.mat-field.is-invalid .mat-search__input { border-color: var(--mat-danger); }
+/* with the script the field has room for the magnifier at its left and the clear button and the hint of the key at its right */
+.mat-search.is-ready .mat-search__input { padding-left: calc(var(--mat-space-3) + 1.6rem); padding-right: 2.5rem; }
+.mat-search.is-ready:has(.mat-search__key:not([hidden])) .mat-search__input { padding-right: 5rem; }
+.mat-search__lens { position: absolute; left: var(--mat-space-3); top: 50%; transform: translateY(-50%); display: grid; color: var(--mat-text-muted); pointer-events: none; }
+.mat-search__lens > .mat-icon { font-size: 1.1rem; }
+.mat-search__clear {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
+  display: grid; place-items: center; width: 28px; height: 28px;
+  border: 0; border-radius: 50%; background: transparent; color: var(--mat-text-muted); cursor: pointer;
+}
+.mat-search__clear:hover { background: var(--mat-surface-3); color: var(--mat-text); }
+.mat-search__clear:focus-visible { outline: none; box-shadow: var(--mat-focus-ring); }
+.mat-search__clear[hidden] { display: none; }
+.mat-search__key { position: absolute; top: 50%; right: var(--mat-space-3); transform: translateY(-50%); pointer-events: none; white-space: nowrap; }
+.mat-search__key[hidden] { display: none; }
+.mat-search.is-filled .mat-search__key, .mat-search:focus-within .mat-search__key { display: none; }
+@media (max-width: 900px) { .mat-search__key { display: none; } }
+/* the X of the full-screen panel and the button that opens it in the header bar exist on a phone only */
+.mat-search__close, .mat-search__open { display: none; }
+
+/* ---- The popup ---- */
+.mat-search__panel {
+  position: fixed; z-index: var(--mat-z-menu);
+  display: flex; flex-direction: column;
+  max-width: calc(100vw - 16px); max-height: min(28rem, calc(100dvh - 16px));
+  overflow: auto; overscroll-behavior: contain;
+  background: var(--mat-surface); color: var(--mat-text);
+  border: 1px solid var(--mat-border-strong); border-radius: var(--mat-radius-lg); box-shadow: var(--mat-shadow-3);
+  animation: mat-picker-in var(--mat-dur-fast) var(--mat-ease);
+}
+.mat-search__panel[hidden] { display: none; }
+.mat-search__list { display: flex; flex-direction: column; gap: 2px; padding: var(--mat-space-2); }
+.mat-search__list:empty { display: none; }
+.mat-search__group { display: flex; flex-direction: column; gap: 2px; }
+.mat-search__group + .mat-search__group { margin-top: var(--mat-space-1); }
+.mat-search__heading { padding: var(--mat-space-2) var(--mat-space-3) var(--mat-space-1); font-size: var(--mat-fs-sm); font-weight: 650; color: var(--mat-text-muted); }
+.mat-search__option {
+  position: relative; display: flex; align-items: center; gap: var(--mat-space-3);
+  width: 100%; padding: var(--mat-space-2) var(--mat-space-3);
+  border: 0; border-radius: var(--mat-radius-sm); background: transparent; color: var(--mat-text);
+  font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+}
+.mat-search__option:hover { background: var(--mat-surface-3); text-decoration: none; }
+.mat-search__option.is-active, .mat-search__option.is-active:hover { background: var(--mat-accent-soft-strong); text-decoration: none; }
+.mat-search__icon { flex: none; display: grid; place-items: center; width: 1.5rem; color: var(--mat-text-muted); }
+.mat-search__icon > .mat-icon { font-size: 1.15rem; }
+.mat-search__text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mat-search__title { font-weight: 600; overflow-wrap: anywhere; }
+.mat-search__desc { font-size: var(--mat-fs-sm); line-height: 1.4; color: var(--mat-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mat-search__kind { flex: none; padding: 0 var(--mat-space-2); border: 1px solid var(--mat-border); border-radius: var(--mat-radius-xs); font-size: var(--mat-fs-xs); line-height: 1.6; color: var(--mat-text-muted); }
+.mat-search__hit { background: transparent; color: var(--mat-accent-text); font-weight: 750; }
+.mat-search__option--all { margin-top: var(--mat-space-1); border-top: 1px solid var(--mat-border); border-radius: 0 0 var(--mat-radius-sm) var(--mat-radius-sm); color: var(--mat-accent-text); font-weight: 650; }
+.mat-search__option--clear { color: var(--mat-text-muted); }
+.mat-search__note { display: flex; align-items: center; gap: var(--mat-space-3); padding: var(--mat-space-3) var(--mat-space-4); color: var(--mat-text-muted); }
+.mat-search__note[hidden] { display: none; }
+.mat-search__note-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mat-search__note.is-error { color: var(--mat-danger-text); }
+.mat-search__note.is-error .mat-search__icon { color: inherit; }
+.mat-search.is-disabled .mat-search__key { opacity: .5; }
+
+/* ---- A phone: the focused field is the whole screen, the field and the X on top ---- */
+@media (max-width: 640px) {
+  .mat-search__input { font-size: 1rem; }
+  .mat-search.is-full {
+    position: fixed; inset: 0; z-index: var(--mat-z-menu);
+    display: flex; flex-direction: column; width: auto;
+    background: var(--mat-surface);
+    padding-top: var(--mat-safe-top); padding-bottom: var(--mat-safe-bottom);
+  }
+  .mat-search.is-full .mat-search__bar { flex: none; padding: var(--mat-space-2) var(--mat-space-2) var(--mat-space-2) var(--mat-space-3); border-bottom: 1px solid var(--mat-border); }
+  .mat-search.is-full .mat-search__close { display: inline-flex; flex: none; }
+  .mat-search.is-full .mat-search__panel {
+    position: static; flex: 1 1 auto; min-height: 0; width: auto; max-width: none; max-height: none;
+    border: 0; border-radius: 0; box-shadow: none; animation: none;
+  }
+  .mat-search.is-full .mat-search__list { padding: var(--mat-space-3); }
+  .mat-search.is-full .mat-search__option { padding: var(--mat-space-3); }
+}
+
+/* ---- Touch targets (MOBILE-04): a row is 44 px high, and the small clear button keeps its look and has a centred target of 44 px ---- */
+@media (pointer: coarse) {
+  .mat-search__option { min-height: 44px; }
+  .mat-search__clear::before { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
+}
+
+@media (forced-colors: active) {
+  .mat-search__option.is-active { outline: 2px solid Highlight; outline-offset: -2px; }
+  .mat-search__hit { text-decoration: underline; }
+}
+
 /* ---- Tags: a field of chips that the user types into (data-picker="tags") ----
    The field is drawn like every field (mat-input) but grows with its chips; the text field inside has no border of its own. The suggestions are the list of a
    select, as a dropdown under the field on every screen size (it is not a full-screen sheet: the keyboard stays in the field). */
@@ -366,3 +482,9 @@
   .mat-colour__hue { box-sizing: border-box; height: 44px; padding-block: 15px; background-clip: content-box; }
 }
 @media (pointer: coarse) and (min-width: 641px) { .mat-cal__month { min-width: 308px; } }
+
+/* ---- The type of a field on a touch screen (MOBILE-06): the search field and the text field of the tags have `font: inherit`, so they are raised to 16 px here, after their own rules
+   (the rest is in matui.forms.css). max(1rem, 1em) never makes one smaller than the size of what it stands in. ---- */
+@media (pointer: coarse) {
+  .mat-search__input, .mat-tagfield__input { font-size: max(1rem, 1em); }
+}

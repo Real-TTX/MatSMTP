@@ -213,8 +213,9 @@ a.mat-card:hover, .mat-card--link:hover { border-color: var(--mat-text-faint); b
   width: min(var(--mat-toast-width, 380px), calc(100vw - 2 * var(--mat-space-4)));
   pointer-events: none;
 }
+/* A toast only tells: a tap on it goes to what lies under it (the next Delete of a list is never blocked); only its X takes the tap. */
 .mat-toast {
-  pointer-events: auto;
+  pointer-events: none;
   display: flex; align-items: flex-start; gap: var(--mat-toast-gap, var(--mat-space-3));
   padding: var(--mat-toast-pad-y, var(--mat-space-3)) var(--mat-toast-pad-x, var(--mat-space-4));
   background: var(--mat-surface); color: var(--mat-text);
@@ -227,8 +228,16 @@ a.mat-card:hover, .mat-card--link:hover { border-color: var(--mat-text-faint); b
 .mat-toast--success > .mat-icon { color: var(--mat-success-text); }
 .mat-toast--warning > .mat-icon { color: var(--mat-warning-text); }
 .mat-toast--danger > .mat-icon { color: var(--mat-danger-text); }
+.mat-toast .mat-alert__close { pointer-events: auto; }
 @keyframes mat-toast-in { from { opacity: 0; transform: translateY(10px); } }
-@media (max-width: 600px) { .mat-toasts { left: var(--mat-space-4); right: var(--mat-space-4); width: auto; } }
+@keyframes mat-toast-in-top { from { opacity: 0; transform: translateY(-10px); } }
+/* On a phone the bottom is where the thumb works (the actions of a list, the sheets, the main button): the toasts stand at the top, under the header bar. */
+@media (max-width: 600px) {
+  .mat-toasts { left: calc(var(--mat-space-4) + var(--mat-safe-left)); right: calc(var(--mat-space-4) + var(--mat-safe-right)); width: auto; top: calc(var(--mat-topbar-h) + var(--mat-space-2) + var(--mat-safe-top)); bottom: auto; }
+  .mat-toast { animation-name: mat-toast-in-top; }
+  /* one at a time, like a snackbar: the newest takes the place of the one before */
+  .mat-toasts > .mat-toast:not(:last-child) { display: none; }
+}
 
 /* ---- Small blocks -------------------------------------------------------------------------------------------------- */
 .mat-empty { display: flex; flex-direction: column; align-items: center; gap: var(--mat-space-3); padding: var(--mat-space-12) var(--mat-space-6); text-align: center; color: var(--mat-text-muted); }
@@ -276,20 +285,29 @@ a.mat-card:hover, .mat-card--link:hover { border-color: var(--mat-text-faint); b
 .mat-steps li.is-done { background: color-mix(in srgb, var(--mat-accent) 55%, transparent); }
 .mat-steps li.is-active { background: var(--mat-accent); }
 
-/* Tooltip for icon buttons: [data-tip="Edit"]. Real information never lives only in a tooltip. */
+/* Tooltip for icon buttons: [data-tip="Edit"]. Real information never lives only in a tooltip.
+   A tip that is not shown takes no room (display: none, not only transparent): a button at the end of a table row or of the header bar would otherwise let
+   its scrolling box scroll sideways by the width of a tip nobody sees. It fades in from @starting-style.
+   Where it opens: centred above the element; at the end of a row of a table (mat-table__actions) and in the actions of the header bar it opens towards the
+   start, in the header bar below (above it there is no room). data-tip-align="start|end" and data-tip-place="below" do the same anywhere else. */
 [data-tip] { position: relative; }
 [data-tip]::after {
   content: attr(data-tip);
-  position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%) translateY(2px);
+  display: none;
+  position: absolute; left: 50%; bottom: calc(100% + 6px); translate: -50% 0;
   padding: 4px 8px; border-radius: var(--mat-radius-xs);
   background: var(--mat-text); color: var(--mat-bg);
   font-size: var(--mat-fs-xs); font-weight: 600; white-space: nowrap;
-  opacity: 0; pointer-events: none;
-  transition: opacity var(--mat-dur-fast) var(--mat-ease), transform var(--mat-dur-fast) var(--mat-ease);
+  opacity: 1; pointer-events: none;
+  transition: opacity var(--mat-dur-fast) var(--mat-ease);
   z-index: var(--mat-z-menu);
 }
-[data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 1; transform: translateX(-50%); }
-@media (hover: none) { [data-tip]::after { display: none; } }
+[data-tip]:hover::after, [data-tip]:focus-visible::after { display: block; }
+@starting-style { [data-tip]:hover::after, [data-tip]:focus-visible::after { opacity: 0; } }
+.mat-table__actions [data-tip]::after, .mat-topbar__actions [data-tip]::after, [data-tip-align="end"]::after { left: auto; right: 0; translate: none; }
+[data-tip-align="start"]::after { left: 0; translate: none; }
+.mat-topbar [data-tip]::after, [data-tip-place="below"]::after { bottom: auto; top: calc(100% + 6px); }
+@media (hover: none) { [data-tip]::after { display: none; } [data-tip]:hover::after, [data-tip]:focus-visible::after { display: none; } }
 
 /* ==========================================================================
    More building blocks: button groups, spinners, progress, accordions, list groups, avatars, indicators, stats, timelines, text, pictures.
@@ -446,7 +464,7 @@ a.mat-listgroup__item:hover, button.mat-listgroup__item:hover { background: var(
 @media (pointer: coarse) {
   /* a link in a list of keys and values: the row is 44 px (half of what the line lacks above and below it), the link has the padding of that room */
   .mat-kv > dd:has(a:not(.mat-btn)), .mat-kv > dt:has(+ dd a:not(.mat-btn)) { padding-block: max(0px, calc((44px - 1lh) / 2)); }
-  .mat-kv dd a:not(.mat-btn) { padding-block: 12px; margin-block: -12px; }
+  .mat-kv dd a:not(.mat-btn) { padding: 12px 4px; margin: -12px -4px; }
   .mat-chip__x, .mat-alert__close { position: relative; }
   .mat-chip__x::before, .mat-alert__close::before { content: ""; position: absolute; left: 50%; top: 50%; width: 44px; height: 44px; transform: translate(-50%, -50%); }
 }

@@ -18,6 +18,16 @@
   background: var(--mat-bg);
 }
 
+/* The shell scrolls inside (the content, the list of the menu); the document itself never does. Without this a wheel over a part that does not
+   scroll (the foot of the menu with the account) is handed on to the document, and any pixel of overflow (rounding at a zoom, a popover, a toast,
+   a touchpad) lets the whole app slide out of the window. Pages without the shell (sign-in, .mat-auth) still scroll. */
+html:has(> body > .mat-app),
+html:has(> body > .mat-app) > body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 /* ---- The menu ---- */
 .mat-nav {
   position: relative;
@@ -29,6 +39,7 @@
   border-right: 1px solid var(--mat-border);
   padding-top: var(--mat-safe-top);
   padding-left: var(--mat-safe-left);
+  overscroll-behavior: contain;
 }
 
 .mat-nav__brand {
@@ -408,6 +419,19 @@ button.mat-nav__item:hover { background: var(--mat-surface-3); }
 .mat-topbar__badge--dot { top: 9px; right: 9px; min-width: 0; width: 8px; height: 8px; padding: 0; }
 .mat-topbar__badge--dot.mat-topbar__badge--warn { background: var(--mat-warning); }
 
+/* Search in the header bar (SHELL-20): an inline field after the breadcrumb and before the icons, whatever the order of the markup (the order is enforced here: the breadcrumb and the burger keep
+   the order 0 they always had, the search is 1, the icons 2). It is a search with suggestions (FORM-23, matui.pickers.css). Below 640 px it is one icon button that opens the full-screen
+   panel, so the breadcrumb and the icons keep their room. */
+.mat-topbar > .mat-topbar__actions { order: 2; }
+/* @prop search | --mat-search-width | length | 18rem | Width of the search field in the header bar; it gets narrower when the bar has no room for it. */
+.mat-topbar > .mat-topbar__search { order: 1; flex: 0 1 var(--mat-search-width, 18rem); min-width: 0; }
+@media (max-width: 640px) {
+  .mat-topbar > .mat-topbar__search { flex: none; margin-right: calc(var(--mat-space-2) * -1); }
+  .mat-topbar__search .mat-search { width: auto; }
+  .mat-topbar__search .mat-search:not(.is-full) .mat-search__bar { display: none; }
+  .mat-topbar__search .mat-search:not(.is-full) .mat-search__open { display: inline-flex; }
+}
+
 .mat-page {
   width: 100%;
   max-width: var(--mat-content-max);
@@ -479,6 +503,8 @@ button.mat-nav__item:hover { background: var(--mat-surface-3); }
   .mat-app.is-nav-open .mat-nav { transform: none; visibility: visible; transition-delay: 0s; }
   .mat-app.is-nav-open .mat-backdrop { opacity: 1; pointer-events: auto; }
   .mat-burger { display: inline-grid; }
+  /* on a touch screen a sideways swipe at the edge is the app's (the drawer), not the browser's back and forward (a trackpad on a wide screen keeps them) */
+  html { overscroll-behavior-x: none; }
   .mat-topbar { padding-top: var(--mat-safe-top); padding-left: calc(var(--mat-topbar-pad-x, var(--mat-content-pad)) + var(--mat-safe-left)); padding-right: calc(var(--mat-topbar-pad-x, var(--mat-content-pad)) + var(--mat-safe-right)); }
 }
 
