@@ -8,7 +8,7 @@ const path = require('path');
 
 const base = process.argv[2] || 'http://localhost:2525';
 const out = process.argv[3];
-const EMAIL = 'admin@example.com', PASS = 'Relay-Demo-2026!';
+const EMAIL = 'admin@example.com', PASS = 'Start12345'; // the test account of every Mat app
 const problems = [];
 // A switch of the toolkit hides its checkbox: the label is what a person clicks.
 async function sw(page, name, on) {
