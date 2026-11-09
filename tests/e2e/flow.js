@@ -162,7 +162,7 @@ function smtp(from, to, subject, port = 2025, extra = []) {
     ['relayusers', '/RelayUsers'], ['webhooks', '/Webhooks'], ['webhook-edit', '/Webhooks/Edit?id=1'], ['dkim', '/Dkim'], ['tools-send', '/Tools/Send'],
     ['admin-smtp', '/Admin/Smtp'], ['admin-delivery', '/Admin/Delivery'], ['admin-backup', '/Admin/Backup'], ['admin-backup-targets', '/Admin/Backup/Targets/Edit'],
     ['admin-backup-plans', '/Admin/Backup/Plans/Edit'], ['admin-users', '/Admin/Users'], ['admin-shares', '/Admin/Shares'], ['admin-system', '/Admin/System'],
-    ['admin-activity', '/Admin/Activity'], ['account-security', '/Account/Security'],
+    ['admin-activity', '/Admin/Activity'], ['admin-connections', '/Admin/Connections'], ['account-security', '/Account/Security'],
   ];
   const dir = out || path.join(__dirname, 'shots');
   fs.mkdirSync(dir, { recursive: true });

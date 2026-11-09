@@ -1,4 +1,4 @@
-// MatPlatform 1.5.0 – a copy from MatDesign, do not edit here
+// MatPlatform 2.2.0 – a copy from MatDesign, do not edit here
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 
@@ -53,4 +53,11 @@ public interface IMatPlatformHealth
 {
     /// <summary>The checks, each <c>ok</c>, <c>degraded</c> or <c>down</c>; the status of the app is the worst of them.</summary>
     Task<IReadOnlyList<MatHealthCheck>> CheckHealthAsync(MatPlatformCall call, CancellationToken ct);
+}
+
+/// <summary>The rows of the widgets of the kind <c>list</c> (<c>GET /api/widgets/{id}</c>).</summary>
+public interface IMatPlatformWidgets
+{
+    /// <summary>Up to eight rows of the widget, newest or most important first; null when the app does not know it (404).</summary>
+    Task<IReadOnlyList<MatWidgetItem>?> GetWidgetAsync(string id, MatPlatformCall call, CancellationToken ct);
 }

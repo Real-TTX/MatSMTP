@@ -1,8 +1,9 @@
-// MatPlatform 1.5.0 – a copy from MatDesign, do not edit here
+// MatPlatform 2.2.0 – a copy from MatDesign, do not edit here
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,7 +22,7 @@ public static class MatPlatformEndpoints
     public const string AnonymousRateLimit = "matplatform-anonymous";
 
     /// <summary>The paths the platform implements, as <c>GET /api</c> lists them.</summary>
-    public static readonly IReadOnlyList<string> Paths = ["/api/health", "/api/state", "/api/configure", "/api/actions"];
+    public static readonly IReadOnlyList<string> Paths = ["/api/health", "/api/state", "/api/configure", "/api/actions", "/api/bindings", "/api/connections", "/api/widgets"];
 
     /// <summary>
     /// Registers the platform: the description of the app (<paramref name="describe"/>), the settings from the environment (<c>MAT_API_KEY</c>,
@@ -46,6 +47,13 @@ public static class MatPlatformEndpoints
         builder.Services.AddSingleton<MatApiAccess>();
         // MAT_FRAME_ANCESTORS: who may show the app in a frame (Mattiverse); nothing without it.
         builder.Services.AddMatFrameAncestors();
+
+        // The bindings (2.0): what the app consumes and provides, kept in its data folder; the Connections area and its forms.
+        builder.Services.AddDataProtection();
+        builder.Services.AddAntiforgery();
+        builder.Services.AddSingleton<MatBindingStore>();
+        builder.Services.AddSingleton<MatBindings>();
+        builder.Services.AddScoped<MatConnections>();
 
         // Per caller address: a consumer that polls every few seconds is fine, a flood is not.
         builder.Services.AddRateLimiter(limiter =>
@@ -80,10 +88,11 @@ public static class MatPlatformEndpoints
         found |= Register<IMatPlatformConfiguration>();
         found |= Register<IMatPlatformActions>();
         found |= Register<IMatPlatformHealth>();
+        found |= Register<IMatPlatformWidgets>();
 
         return found
             ? services
-            : throw new InvalidOperationException($"{typeof(TApp).Name} implements none of IMatPlatformState, IMatPlatformConfiguration, IMatPlatformActions, IMatPlatformHealth.");
+            : throw new InvalidOperationException($"{typeof(TApp).Name} implements none of IMatPlatformState, IMatPlatformConfiguration, IMatPlatformActions, IMatPlatformHealth, IMatPlatformWidgets.");
 
         bool Register<TInterface>()
             where TInterface : class
@@ -215,6 +224,9 @@ public static class MatPlatformEndpoints
                 ? Errors(id, call.T("Diese Aktion gibt es nicht.", "There is no such action."), StatusCodes.Status404NotFound)
                 : Results.Json(result, json, statusCode: result.Ok ? StatusCodes.Status200OK : StatusCodes.Status409Conflict);
         });
+
+        // 2.0: the bindings for a broker, GET /api/connections, the rows of the list widgets and the form of the Connections area.
+        MatConnectionEndpoints.Map(app, api);
 
         return api;
     }

@@ -19,8 +19,16 @@
     <div class="mat-alert mat-alert--info" role="status" id="managed-by">
         @Ui.Icon("link")
         <div class="mat-alert__body">
-            <strong>Verwaltet @Labels.ManagedBy(managedBy)</strong>
-            <span>Dieser Zugang wurde über die Schnittstelle angelegt (Kennung <span class="mat-mono">@Model.Item.ApiId</span>). @Labels.Manager(managedBy) kann ihn jederzeit überschreiben; was du hier änderst, gilt bis dahin.</span>
+            @if (Labels.IsByHand(managedBy))
+            {
+                <strong>Verbindung einer App</strong>
+                <span>Dieser Zugang wurde unter <a href="/Admin/Connections">Verbindungen</a> von Hand für eine App angelegt (Kennung <span class="mat-mono">@Model.Item.ApiId</span>). Dort bekommt er ein neues Passwort oder wird entfernt.</span>
+            }
+            else
+            {
+                <strong>Verwaltet @Labels.ManagedBy(managedBy)</strong>
+                <span>Dieser Zugang wurde über die Schnittstelle angelegt (Kennung <span class="mat-mono">@Model.Item.ApiId</span>). @Labels.Manager(managedBy) kann ihn jederzeit überschreiben; was du hier änderst, gilt bis dahin.</span>
+            }
         </div>
     </div>
 }

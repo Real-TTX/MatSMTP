@@ -11,6 +11,7 @@ using MatSmtp.Platform;
 using MatSmtp.Services.Relay;
 using MatSmtp.UiKit;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Localization;
@@ -114,7 +115,16 @@ if (string.IsNullOrWhiteSpace(builder.Configuration[MatPlatformSettings.ApiKeyVa
     builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { [MatPlatformSettings.ApiKeyVariable] = engineKey });
 }
 
-var platform = builder.AddMatPlatform<SmtpPlatform>(SmtpPlatform.Describe);
+// Contract 2: the bindings live in the data folder (what MatSMTP consumes, entered by hand), the relay users of the bindings of mail.smtp in the database
+// (SmtpBindings); the Connections area (Admin/Connections) is for the administrators.
+var platform = builder.AddMatPlatform<SmtpPlatform>(SmtpPlatform.Describe, o =>
+{
+    o.DataDirectory = dataDir;
+    o.ConnectionsAccess = async http => (await http.AuthenticateAsync(SignInService.CookieScheme)).Principal?.IsInRole(nameof(UserRole.Admin)) == true;
+    // MatSMTP speaks German: so does the Connections area of MatPlatform (2.2.0), whatever the browser asks for.
+    o.UiLanguage = _ => "de";
+});
+builder.Services.AddScoped<IMatBindingHandler, SmtpBindings>();
 
 builder.Services.AddAuthentication(SignInService.CookieScheme)
     .AddCookie(SignInService.CookieScheme, options =>

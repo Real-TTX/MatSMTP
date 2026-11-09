@@ -1,4 +1,4 @@
-// MatPlatform 1.5.0 – a copy from MatDesign, do not edit here
+// MatPlatform 2.2.0 – a copy from MatDesign, do not edit here
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -6,12 +6,13 @@ using System.Text.Unicode;
 
 namespace MatPlatform;
 
-// The types of the platform contract (MatDesign docs/PLATFORM.md, contract version 1). The same types are served by an app and read by a consumer.
+// The types of the platform contract (MatDesign docs/PLATFORM.md, contract version 2). The same types are served by an app and read by a consumer.
 
 /// <summary>The answer of <c>GET /api</c>: what the app is and how a consumer draws it. The values are never in it.</summary>
 public sealed record MatApiDefinition
 {
-    public const int ContractVersion = 1;
+    /// <summary>2: capabilities with bindings (<c>/api/bindings</c>, <c>/api/connections</c>) and the contributions to a shell (<see cref="Contributes"/>).</summary>
+    public const int ContractVersion = 2;
 
     public int Contract { get; init; } = ContractVersion;
 
@@ -30,6 +31,9 @@ public sealed record MatApiDefinition
     public IReadOnlyList<MatCapability> Provides { get; init; } = [];
 
     public IReadOnlyList<MatCapability> Consumes { get; init; } = [];
+
+    /// <summary>What the app adds to a shell such as the home screen of Mattiverse: icons, widgets, the menu of an icon (null: nothing, the shell shows one icon for <c>app.home</c>).</summary>
+    public MatContributions? Contributes { get; init; }
 
     /// <summary>The roles of the app, the most powerful first; MatIdentity offers them when an administrator gives the app to people (null: the app has none to offer).</summary>
     public IReadOnlyList<MatRole>? Roles { get; init; }
@@ -121,7 +125,18 @@ public sealed record MatAction(string Id, string Label, string Icon, string Kind
     public bool? Danger { get; init; }
 }
 
-public sealed record MatCapability(string Capability, int Version, bool? Optional = null);
+/// <summary>
+/// A capability the app provides or consumes (docs/PLATFORM.md "Capabilities"): its name, its version, whether the app works without it, what it is for in words
+/// (shown in the Connections area) and, for a consumer, the parameters it passes to the provider when it is bound.
+/// </summary>
+public sealed record MatCapability(string Capability, int Version, bool? Optional = null)
+{
+    /// <summary>What the app does with it, in words ("Opens office files with"); null: the label of the capability.</summary>
+    public string? Label { get; init; }
+
+    /// <summary>What the consumer passes to the provider when it is bound (<c>sender</c> of <c>mail.smtp</c>, ...).</summary>
+    public IReadOnlyDictionary<string, string>? Params { get; init; }
+}
 
 /// <summary>A role of the app: the value of the claim <c>role</c> and its name for people.</summary>
 public sealed record MatRole(string Key, string Label);

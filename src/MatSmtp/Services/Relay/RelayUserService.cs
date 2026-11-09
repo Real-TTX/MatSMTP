@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using MatSmtp.Configuration;
 using MatSmtp.Core.Relay;
 using MatSmtp.Core.Security;
 using MatSmtp.Data;
@@ -20,13 +21,22 @@ public sealed record RelayUserApiResult(int Status, string? Error, RelayUser? Us
     public static RelayUserApiResult Fail(int status, string error) => new(status, error);
 }
 
+/// <summary>A relay user as a binding of the capability <c>mail.smtp</c>: the consumer (its id), its name, who manages it, since when and when it last signed in.</summary>
+public sealed record RelayUserBinding(string Consumer, string Name, string ManagedBy, DateTime Since, DateTime? LastUsed);
+
 /// <summary>
-/// The relay users: the accounts applications sign in with at the receiver (SMTP AUTH). The pages, the management API of Mattiverse and the receiver use
-/// this one class. Passwords are only ever stored as a hash; a generated one is handed out once. A user that the API made with <c>managedBy</c>
-/// belongs to that caller: the API lets only the same <c>managedBy</c> change or delete it (the pages may, and show a badge).
+/// The relay users: the accounts applications sign in with at the receiver (SMTP AUTH). The pages, the management API of Mattiverse, the bindings of
+/// <c>mail.smtp</c> (MatPlatform) and the receiver use this one class. Passwords are only ever stored as a hash; a generated one is handed out once. A user
+/// that the API made with <c>managedBy</c> belongs to that caller: the API lets only the same <c>managedBy</c> change or delete it (the pages may, and show a badge).
 /// </summary>
-public sealed partial class RelayUserService(MsDbContext db, TimeProvider clock, ILogger<RelayUserService> logger)
+public sealed partial class RelayUserService(MsDbContext db, ConfigStore config, TimeProvider clock, ILogger<RelayUserService> logger)
 {
+    /// <summary>Who made a binding by hand (the Connections area); a relay user of the API without <c>managedBy</c> is listed as one too.</summary>
+    public const string ManagedByHand = "manual";
+
+    /// <summary>The domain of the sender of a binding while the settings name no default sender domain.</summary>
+    public const string BindingDomainFallback = "localhost";
+
     /// <summary>The shortest password the page accepts (a generated one is longer).</summary>
     public const int MinPasswordLength = 12;
 
@@ -38,6 +48,10 @@ public sealed partial class RelayUserService(MsDbContext db, TimeProvider clock,
 
     [GeneratedRegex(@"^[A-Za-z0-9._@+\-]{2,100}$")]
     private static partial Regex UserNamePattern();
+
+    // The part of an address before the @ as a binding passes it: no pattern (*, /.../), no list, no second @.
+    [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9._+\-]{0,63}$")]
+    private static partial Regex LocalPartPattern();
 
     public static bool IsValidApiId(string? id) => id is not null && ApiIdPattern().IsMatch(id);
 
@@ -250,22 +264,28 @@ public sealed partial class RelayUserService(MsDbContext db, TimeProvider clock,
             return RelayUserApiResult.Fail(409, $"The relay user {apiId} is managed by {user.ManagedBy}.");
         }
 
-        var created = user is null;
-        if (user is null)
+        if (user is null && await db.RelayUser.AnyAsync(u => u.UserName == apiId, ct))
         {
-            if (await db.RelayUser.AnyAsync(u => u.UserName == apiId, ct))
-            {
-                return RelayUserApiResult.Fail(409, $"A relay user named {apiId} was made in MatSMTP itself; rename or delete it there first.");
-            }
-
-            user = db.RelayUser.Add(new RelayUser { ApiId = apiId, UserName = apiId }).Entity;
+            return RelayUserApiResult.Fail(409, $"A relay user named {apiId} was made in MatSMTP itself; rename or delete it there first.");
         }
 
+        return await SaveApiUserAsync(user, apiId, displayName, list, managedBy ?? user?.ManagedBy, input.RenewSecret, ct);
+    }
+
+    /// <summary>
+    /// Writes a relay user of the API (<paramref name="user"/>, or a new one named <paramref name="apiId"/> when it is null): its name, its senders, who manages it
+    /// and, when it is new or <paramref name="newPassword"/>, a generated password that is returned once. The one place that makes and changes such users.
+    /// </summary>
+    private async Task<RelayUserApiResult> SaveApiUserAsync(RelayUser? user, string apiId, string? displayName, string senders, string? managedBy, bool newPassword, CancellationToken ct)
+    {
+        var created = user is null;
+        user ??= db.RelayUser.Add(new RelayUser { ApiId = apiId, UserName = apiId }).Entity;
+        user.ApiId = apiId;
         user.Description = displayName;
-        user.AllowedSenders = list;
-        user.ManagedBy = managedBy ?? user.ManagedBy;
+        user.AllowedSenders = senders;
+        user.ManagedBy = managedBy;
         string? password = null;
-        if (created || input.RenewSecret)
+        if (created || newPassword)
         {
             password = GeneratePassword();
             user.PasswordHash = PasswordHasher.Hash(password);
@@ -302,6 +322,65 @@ public sealed partial class RelayUserService(MsDbContext db, TimeProvider clock,
         db.RelayUser.Remove(user);
         await db.SaveChangesAsync(ct);
         return new RelayUserApiResult(204, null, user);
+    }
+
+    // ------------------------------------------------------------------------------------------------ the bindings of mail.smtp (MatPlatform)
+
+    /// <summary>The relay users of the API as the bindings of <c>mail.smtp</c>; one without <c>managedBy</c> counts as made by hand.</summary>
+    public async Task<IReadOnlyList<RelayUserBinding>> ListBindingsAsync(CancellationToken ct = default)
+        => [.. (await ListApiAsync(ct)).Select(u => new RelayUserBinding(u.ApiId!, u.Description ?? u.UserName, u.ManagedBy ?? ManagedByHand, u.CreateDate, u.LastUsedDate))];
+
+    /// <summary>The id of the relay user of a consumer: the consumer id, with <c>-app</c> when it is shorter than an id of the API may be (<c>x</c> → <c>x-app</c>).</summary>
+    public static string BindingIdOf(string consumer) => consumer.Length < 2 ? consumer + "-app" : consumer;
+
+    /// <summary>
+    /// The sender of a binding: <paramref name="sender"/> (the part before the <c>@</c>, default: the consumer id) at the default sender domain of the settings, else at
+    /// <c>localhost</c> (which the relay turns into the default domain once there is one). A part that is no plain local part (a pattern, a list) counts as none.
+    /// </summary>
+    public string SenderOf(string consumer, string? sender)
+    {
+        var local = Clean(sender) is { } given && LocalPartPattern().IsMatch(given) ? given : BindingIdOf(consumer);
+        var domain = Clean(config.Current.Smtp.DefaultSenderDomain)?.TrimStart('@').ToLowerInvariant();
+        return $"{local}@{domain ?? BindingDomainFallback}";
+    }
+
+    /// <summary>
+    /// Makes or updates the relay user of a binding of <c>mail.smtp</c> (docs/PLATFORM.md of MatDesign): its id is the consumer's, its description the consumer's name,
+    /// <c>managedBy</c> the caller's and <see cref="SenderOf"/> its only allowed sender (the <c>From</c> of the binding). The same call twice is one user. A password is
+    /// made when the binding is new or <paramref name="renew"/>; else it is null and the old one stays. Unlike <see cref="UpsertApiAsync"/> a binding never refuses:
+    /// the caller of a binding (a broker with the key of the app, an administrator in the Connections area) takes over a user of another <c>managedBy</c>, and a user
+    /// of the pages with the consumer's name becomes the binding; since it was no binding before, it gets a new password like a new one.
+    /// </summary>
+    /// <remarks>Not called <c>BindAsync</c>: a minimal API takes a method of that name on the type of a parameter (this service) for its own binding.</remarks>
+    public async Task<RelayUserApiResult> UpsertBindingAsync(string consumer, string? name, string? sender, string managedBy, bool renew, CancellationToken ct = default)
+    {
+        var apiId = BindingIdOf(consumer ?? "");
+        if (!IsValidApiId(apiId))
+        {
+            return RelayUserApiResult.Fail(400, "The consumer id must be 2 to 64 characters: small letters, digits and '-'.");
+        }
+
+        var displayName = Clean(name);
+        var user = await db.RelayUser.FirstOrDefaultAsync(u => u.ApiId == apiId, ct)
+            ?? await db.RelayUser.FirstOrDefaultAsync(u => u.ApiId == null && u.UserName == apiId, ct);
+        var adopted = user is not null && user.ApiId is null;
+        return await SaveApiUserAsync(user, apiId, displayName is { Length: > 300 } ? displayName[..300] : displayName, SenderOf(apiId, sender),
+            Clean(managedBy) ?? ManagedByHand, renew || adopted, ct);
+    }
+
+    /// <summary>Removes the relay user of a binding: only one made by <paramref name="managedBy"/> (null: any). Null when there is none (or it is another's).</summary>
+    public async Task<RelayUser?> RemoveBindingAsync(string consumer, string? managedBy, CancellationToken ct = default)
+    {
+        var apiId = BindingIdOf(consumer ?? "");
+        var user = IsValidApiId(apiId) ? await db.RelayUser.FirstOrDefaultAsync(u => u.ApiId == apiId, ct) : null;
+        if (user is null || (Clean(managedBy) is { } by && (user.ManagedBy ?? ManagedByHand) != by))
+        {
+            return null;
+        }
+
+        db.RelayUser.Remove(user);
+        await db.SaveChangesAsync(ct);
+        return user;
     }
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

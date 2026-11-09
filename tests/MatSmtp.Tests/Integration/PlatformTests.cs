@@ -33,8 +33,17 @@ public sealed class PlatformTests(AppFixture app) : IClassFixture<AppFixture>
         Assert.True(definition.Configure.Count <= 10, "at most ten settings");
         Assert.Equal(["admin", "user"], definition.Roles!.Select(r => r.Key).ToArray());
 
+        // Contract 2: MatSMTP relays the mail of the other apps and may sign people in through MatIdentity (optional).
+        var provided = Assert.Single(definition.Provides);
+        Assert.Equal(MatCapabilities.MailSmtp, provided.Capability);
+        Assert.Equal(1, provided.Version);
+        Assert.Equal(language == "en" ? "Relays mail for" : "Versendet Mails für", provided.Label);
+        var consumed = Assert.Single(definition.Consumes);
+        Assert.Equal(MatCapabilities.IdentityOidc, consumed.Capability);
+        Assert.True(consumed.Optional);
+
         // All engines on one copy of the package.
-        Assert.Equal("1.5.0", MatPlatformInfo.Version);
+        Assert.Equal("2.2.0", MatPlatformInfo.Version);
     }
 
     [Fact]
@@ -46,7 +55,8 @@ public sealed class PlatformTests(AppFixture app) : IClassFixture<AppFixture>
         var definition = await anonymous.GetAsync("/api");
         Assert.Equal(HttpStatusCode.OK, definition.StatusCode);
         var body = await BodyAsync(definition);
-        Assert.Equal(1, body.GetProperty("contract").GetInt32());
+        Assert.Equal(2, body.GetProperty("contract").GetInt32());
+        Assert.Equal("mail.smtp", body.GetProperty("provides")[0].GetProperty("capability").GetString());
         Assert.Equal("matsmtp", body.GetProperty("app").GetProperty("id").GetString());
         Assert.True(body.GetProperty("auth").GetProperty("apiKey").GetBoolean());
 

@@ -1,6 +1,9 @@
 @page
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Mvc
 @attribute [AllowAnonymous]
+@* A refused post (403 of the Connections form) is shown here by re-executing the same post: it changes nothing, so it needs no token. *@
+@attribute [IgnoreAntiforgeryToken]
 @{
     Layout = "_Bare";
     var code = int.TryParse(ViewContext.HttpContext.Request.Query["code"], out var parsed) ? parsed : 500;

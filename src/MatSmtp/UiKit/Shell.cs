@@ -149,6 +149,7 @@ public sealed class ShellFactory(ICurrentUser user, NavCounts counts, IHttpConte
                 new("Wiederherstellung", "/Admin/Backup/Restore", null),
             ]),
             new("Sicherheit", "/Admin/Security", "shield"),
+            new("Verbindungen", "/Admin/Connections", "link"),
         ]),
         new("Protokolle",
         [

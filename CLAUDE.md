@@ -35,12 +35,16 @@ A migration: `dotnet ef migrations add <Name> -p src/MatSmtp -s src/MatSmtp -o D
   `SignAsync`: the spooler signs as the **last** change before sending, after the forced sender of the account; the message is prepared for 7 bit first, so MailKit
   does not re-encode it and break the signature).
 - `Pages/`: `Index` (overview), `Messages/` (list + queue share `MessageListModel` and `_MessageList`, `Details`), `Rules/`, `RuleTest`, `Accounts/`, `RelayUsers/`,
-  `Webhooks/`, `Dkim/`, `Tools/Send`, `Share/Index` (`/s/{token}`, anonymous), `Admin/` (Smtp, Delivery, Users, Shares, Backup, Security, Activity, System), `Account/`.
-- `Services/Relay/` also holds the business layer of the pages: `RelayUserService` (pages, management API, SMTP AUTH), `AccountService`, `RelayStatusService`
+  `Webhooks/`, `Dkim/`, `Tools/Send`, `Share/Index` (`/s/{token}`, anonymous), `Admin/` (Smtp, Delivery, Users, Shares, Backup, Security, Connections, Activity, System), `Account/`.
+  `Admin/Connections` is only MatPlatform's `<mat-connections />` (the Connections area; its forms post to `/api/connections/form`, `ConnectionsAccess` = administrators).
+- `Services/Relay/` also holds the business layer of the pages: `RelayUserService` (pages, management API, the bindings of `mail.smtp`, SMTP AUTH), `AccountService`, `RelayStatusService`
   (overview, menu badges, platform tiles and health), `RelaySettingsService` (the platform settings), `MessageService`. **No `MsDbContext` or EF LINQ in a page model,
   an endpoint or a view**: a page calls a service.
-- `Api/ManagementApi.cs`: the engine API `/api/v1` for Mattiverse (key `MATSMTP_API_KEY`, see README). `Platform/`: `SmtpPlatform` (the MatApiDefinition and its values)
-  and `SmtpIdentityUsers` (sign-in through MatIdentity). `MatPlatform/` is a **copy** from MatDesign (`node tools/matplatform-copy.js` there): never edit it here.
+- `Api/ManagementApi.cs`: the engine API `/api/v1` for Mattiverse (key `MATSMTP_API_KEY`, see README; `SendPort` = the port and TLS mode an app in the Docker network uses).
+  `Platform/`: `SmtpPlatform` (the MatApiDefinition and its values; contract 2: provides `mail.smtp`, consumes `identity.oidc` optionally), `SmtpBindings` (the
+  `IMatBindingHandler` of `mail.smtp`: a binding is a relay user of the API made by `RelayUserService.UpsertBindingAsync`, the values are host/port/TLS/user/password/from)
+  and `SmtpIdentityUsers` (sign-in through MatIdentity). `MatPlatform/` is a **copy** from MatDesign (`node tools/matplatform-copy.js` there, 2.1.0): never edit it here.
+  The shared Connections area speaks German like the pages: `UiLanguage = _ => "de"` in the AddMatPlatform options (MatPlatform 2.2.0); the culture stays invariant.
 - `UiKit/` (table with optional selection, toolbar, pager, shell/menu, labels), `Controls/` (tag helpers `ms-*`), `wwwroot/` (app.css, app.js, `ui/` = MatUi copy).
 
 ## Conventions
@@ -76,6 +80,9 @@ A migration: `dotnet ef migrations add <Name> -p src/MatSmtp -s src/MatSmtp -o D
 - SmtpServer 11: `EndpointListener` has no public constructor (no custom listener factory); the receiver binds IPv4 `0.0.0.0`. A filter refuses with
   `SmtpResponseException`; MailKit reports a 530 as `ServiceNotAuthenticatedException`.
 - The namespace `MatSmtp.Pages.Dkim` hides the class `MatSmtp.Core.Relay.Dkim` in the pages: they use the alias `DkimRules`.
+- A minimal API takes a method `BindAsync` on the type of a parameter for its own binding (and fails at startup when it does not fit): a service that endpoints
+  inject never has a method of that name (`RelayUserService.UpsertBindingAsync`).
+- A refused POST (an empty 403) is shown by re-executing the same POST on `/Error`: that page ignores the anti-forgery token, else the answer becomes 400.
 - On Windows a certificate for TLS needs a persisted key (`CertificateService.KeyFlags`); in the container keys stay ephemeral.
 - SMBLibrary only talks SMB over TCP port 445. The dev compose has an explicit subnet (`10.253.26.0/24`).
 

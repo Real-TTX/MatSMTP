@@ -52,7 +52,7 @@ public sealed class PagesTests : IClassFixture<AppFixture>
             "/Accounts", "/Accounts/Edit", $"/Accounts/Edit?id={account}", "/RelayUsers", "/RelayUsers/Edit", $"/RelayUsers/Edit?id={relayUser}",
             "/Webhooks", "/Webhooks/Edit", $"/Webhooks/Edit?id={webhook}", "/Dkim", "/Dkim/Edit", "/Dkim?dns=problem&sort=used", "/Tools/Send",
             "/Admin/Smtp", "/Admin/Delivery", "/Admin/Users", "/Admin/Users/Edit", "/Admin/Shares", "/Admin/Backup", "/Admin/Backup/Plans", "/Admin/Backup/Plans/Edit",
-            "/Admin/Backup/Targets", "/Admin/Backup/Targets/Edit", "/Admin/Backup/Restore", "/Admin/Security", "/Admin/Activity", "/Admin/System",
+            "/Admin/Backup/Targets", "/Admin/Backup/Targets/Edit", "/Admin/Backup/Restore", "/Admin/Security", "/Admin/Activity", "/Admin/System", "/Admin/Connections",
             "/Account/Profile", "/Account/Security",
         ];
 
@@ -157,7 +157,7 @@ public sealed class PagesTests : IClassFixture<AppFixture>
             Assert.Equal(HttpStatusCode.OK, (await user.GetAsync(url)).StatusCode);
         }
 
-        foreach (var url in new[] { "/Rules", "/Rules/Edit", "/Accounts", "/RelayUsers", "/Webhooks", "/Dkim", "/Dkim/Edit", "/Tools/Send", "/Admin/Smtp", "/Admin/Delivery", "/Admin/Users", "/Admin/Backup", "/Admin/Shares", "/Admin/System", "/Admin/Security" })
+        foreach (var url in new[] { "/Rules", "/Rules/Edit", "/Accounts", "/RelayUsers", "/Webhooks", "/Dkim", "/Dkim/Edit", "/Tools/Send", "/Admin/Smtp", "/Admin/Delivery", "/Admin/Users", "/Admin/Backup", "/Admin/Shares", "/Admin/System", "/Admin/Security", "/Admin/Connections" })
         {
             var status = (await user.GetAsync(url)).StatusCode;
             Assert.NotEqual(HttpStatusCode.OK, status);

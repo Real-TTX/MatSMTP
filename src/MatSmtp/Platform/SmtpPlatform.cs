@@ -129,6 +129,10 @@ public sealed class SmtpPlatform(
 
         o.Role("admin", "Administrator");
         o.Role("user", T("Benutzer", "User"));
+
+        // Contract 2: MatSMTP relays the mail of the other apps (a binding is a relay user, SmtpBindings) and may sign people in through MatIdentity.
+        o.Provides(MatCapabilities.MailSmtp, label: T("Versendet Mails für", "Relays mail for"));
+        o.Consumes(MatCapabilities.IdentityOidc, optional: true);
     }
 
     public async Task<IReadOnlyList<MatHealthCheck>> CheckHealthAsync(MatPlatformCall call, CancellationToken ct)

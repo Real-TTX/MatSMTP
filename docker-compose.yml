@@ -20,6 +20,7 @@ services:
       # MATSMTP_ADMIN_PASSWORD: ""           # headless: creates the administrator "admin" with this password (8+ characters), no setup page
       # MATSMTP_API_KEY: ""                  # the key of the management API /api/v1 (Mattiverse sets it)
       # MAT_API_KEY: ""                      # the key of /api/* (platform contract; without it MATSMTP_API_KEY serves there too)
+      # MAT_INTERNAL_URL: ""                 # http://matsmtp:2525: where the other apps reach MatSMTP (MATSMTP_HOST of an app connected by hand)
       # MATIDENTITY_AUTHORITY: ""            # https://id.example.com: sign-in through MatIdentity
       # MATIDENTITY_CLIENT_ID: "matsmtp"
       # MATIDENTITY_CLIENT_SECRET: ""

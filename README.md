@@ -30,6 +30,8 @@ by rules which account, which sender and which webhook a message gets.
 - A relay user can be **limited to its own senders** (`shop.example.com`, `*@billing.example.com`)
 - TLS certificate: **self-signed automatically**, or **uploaded** (PFX or PEM with key)
 - Ten wrong passwords from one address lock that address out for 15 minutes
+- The mail relay of the Mat apps: it provides the capability **`mail.smtp`** of the platform contract, so an app gets its relay user and its six `MATSMTP_*`
+  values from Mattiverse or, without Mattiverse, from *Einstellungen → Verbindungen* ([below](#mail-for-the-other-apps-the-capability-mailsmtp))
 
 **Rules – policy based routing**
 - Conditions on **sender, recipient, client network, relay user and subject** – domains, wildcards, regular expressions
@@ -214,6 +216,7 @@ Then in the web interface:
 | Synology / TrueNAS notifications | SMTP server and port as above, "Secure connection: STARTTLS" |
 | Printer / scanner (scan to mail) | Often no TLS: a relay user on port 25 from the LAN, or its address added to the trusted networks |
 | A quick test | `curl --url smtp://localhost:25 --user app:<password> --mail-from app@example.com --mail-rcpt you@example.org -T mail.txt` |
+| A Mat app (MatDrive, MatSplit, …) | Mattiverse connects it by itself; without Mattiverse *Einstellungen → Verbindungen → App von Hand verbinden*, then the six values in the app (see [`mail.smtp`](#mail-for-the-other-apps-the-capability-mailsmtp)) |
 
 ### 4. From source
 
@@ -239,6 +242,7 @@ docker compose -f docker-compose.dev.yml up -d --build    # development stack
 | `MATSMTP_ADMIN_EMAIL` | `admin` | The sign-in name of that administrator |
 | `MATSMTP_API_KEY` | – | The key of the management API `/api/v1` (header `X-Api-Key`). Not set: the API answers 503 |
 | `MAT_API_KEY` | – | The key of the platform endpoints `/api/*` (header `X-Api-Key`). Not set: `MATSMTP_API_KEY` serves there too |
+| `MAT_INTERNAL_URL` | – | Where the other apps reach MatSMTP on the shared Docker network (`http://matsmtp:2525`): its host is the `MATSMTP_HOST` of an app connected by hand. Not set: the *Servername* of *Einstellungen → Empfang*. Mattiverse names its own address with every binding |
 | `MAT_FRAME_ANCESTORS` | – | The addresses (origins) that may show MatSMTP in a frame, separated by spaces, such as `http://localhost:8030 https://mattiverse.example.com`: Mattiverse sets its own, so it can open MatSMTP in the window of its home screen. With it, answers carry `frame-ancestors 'self' <origins>` instead of `X-Frame-Options`; anything that is not an origin (a path, `*`) is left out. Not set: nobody may frame MatSMTP. |
 | `MATIDENTITY_AUTHORITY` | – | The address of MatIdentity (`https://id.example.com`). Set = sign-in through MatIdentity |
 | `MATIDENTITY_CLIENT_ID` | `matsmtp` | The client of MatSMTP in MatIdentity |
@@ -291,7 +295,8 @@ A backup holds the database, the settings, the keys and the certificates – and
 MatSMTP is one of the engines of [Mattiverse](https://github.com/Real-TTX/Mattiverse): Mattiverse gives every app it installs its own SMTP login and
 tells it where to send. The API lives under `/api/v1`, speaks JSON (camelCase) and needs the header **`X-Api-Key`** = `MATSMTP_API_KEY`.
 Without a configured key every call answers **503**, a wrong or missing key **401**, errors are always `{"error": "..."}`; the cookie of a session counts
-for nothing here.
+for nothing here. With the platform contract 2 a broker makes the same relay users through the bindings instead
+([`mail.smtp`](#mail-for-the-other-apps-the-capability-mailsmtp)); `/api/v1` stays as it is for callers that know only it.
 
 | Method and path | Answer |
 |---|---|
@@ -333,6 +338,52 @@ the shared package MatPlatform, copied to `src/MatSmtp/MatPlatform/`), so Mattiv
 | `GET /api/state[/{key}]` | `X-Api-Key` = `MAT_API_KEY` (else `MATSMTP_API_KEY`) or a token of MatIdentity | the tiles: `queued`, `deferred`, `sent24h`, `failed24h`, `received24h`, `lastDelivery`, `accounts`, `accountsHealth`, `webhooksFailing` |
 | `GET` / `PUT /api/configure` | the same | the few settings: `hostname`, `defaultSenderDomain`, `trustedNetworks`, the default account (`relayHost`, `relayPort`, `relaySecurity`, `relayUsername`, `relayPassword`, `relayFrom`; made as "Standard" when there is none) and `paused`. The password is never sent back (`{"isSet": true}`) |
 | `POST /api/actions/{id}` | the same | `flushDeferred` (send what is deferred now), `retryFailed` (failed messages of the last 24 hours back into the queue), `testAccount` (connect to the default account and sign in, nothing is sent); links to the app, the messages, the queue and the accounts |
+| `GET /api/bindings` | `X-Api-Key` only | the apps bound to `mail.smtp`: `{"bindings": [{"capability", "consumer", "name", "managedBy", "since", "lastUsed"}]}` |
+| `PUT` / `DELETE /api/bindings/mail.smtp/{consumer}` | `X-Api-Key` only | a broker binds an app (below); `DELETE ...?managedBy=mattiverse` removes only what that manager made: `204`, else `404` |
+| `GET /api/connections` | key or token | what MatSMTP uses (`identity.oidc`, optional) and offers (`mail.smtp` with its apps), as the Connections area shows it |
+
+The definition says `"contract": 2`, `provides: mail.smtp` ("Versendet Mails für") and `consumes: identity.oidc` (optional).
+
+### Mail for the other apps: the capability `mail.smtp`
+
+MatSMTP is the provider of `mail.smtp` (MatDesign docs/PLATFORM.md, "`mail.smtp` (version 1)"). **A binding is a relay user of the API**, made by the same code as
+the ones of `/api/v1`, so they show up on *Zugänge* and in `GET /api/v1/relay-users` alike:
+
+| Binding | Relay user |
+|---|---|
+| the consumer id (`matdrive`) | its id and SMTP user name (`-app` added to a one-letter id) |
+| the consumer's name (`MatDrive`) | its description |
+| `managedBy` (`mattiverse`, or `manual` for the Connections area) | its *verwaltet von*; a `DELETE` with another `managedBy` removes nothing |
+| the parameter `sender` (default: the consumer id) | its only allowed sender `<sender>@<default sender domain>`, `@localhost` while there is no default domain |
+| new, or `"renew": true` | a new password (32 characters), handed out this once; else none (`{"isSet": true}`) and the old one stays |
+
+A broker such as Mattiverse calls it with `MAT_API_KEY` (else `MATSMTP_API_KEY`):
+
+```json
+PUT /api/bindings/mail.smtp/matdrive
+{ "version": 1, "managedBy": "mattiverse",
+  "consumer": { "name": "MatDrive", "url": "https://drive.example.com", "internalUrl": "http://mattiverse-matdrive-web:4810" },
+  "provider": { "url": "https://smtp.example.com", "internalUrl": "http://mattiverse-matsmtp-matsmtp:2525" },
+  "params": { "sender": "drive" }, "renew": false }
+
+200 { "variables": { "MATSMTP_HOST": "mattiverse-matsmtp-matsmtp", "MATSMTP_PORT": "2025", "MATSMTP_USERNAME": "matdrive",
+                     "MATSMTP_PASSWORD": "…", "MATSMTP_FROM": "drive@example.com", "MATSMTP_TLS": "none" } }
+```
+
+- `MATSMTP_HOST` is the host of the provider's internal address (MatSMTP's container on the shared network), else of `MAT_INTERNAL_URL`, else the *Servername*.
+- `MATSMTP_PORT` and `MATSMTP_TLS` are what `/api/v1/status` names: the internal SMTP port (2025) with `none` while AUTH without TLS is allowed there from the
+  private networks, else `starttls`; the submission port with `starttls` or the TLS port with `tls` when that port is off.
+- Unlike `/api/v1` a binding never refuses: the one who binds (the broker with the key, an administrator) takes over a relay user of another `managedBy`, and a
+  relay user made on *Zugänge* with the consumer id as its name becomes the binding (it gets a new password then, since it was no binding before).
+
+**The Connections area** (*Einstellungen → Verbindungen*, administrators only) is the same in every Mat app (MatPlatform's `<mat-connections />`): what MatSMTP
+uses (the sign-in through MatIdentity, set by the `MATIDENTITY_*` variables), what it offers (the apps bound to `mail.smtp`, who manages each, since when, last
+used; *Neuer Schlüssel* gives a relay user a new password, *Entfernen* deletes it) and *App von Hand verbinden*.
+
+**Without Mattiverse** nothing changes for MatSMTP: connect an app by hand. *Einstellungen → Verbindungen → App von Hand verbinden*, type the app's name
+(`MatDrive`): MatSMTP makes the relay user `matdrive` (`managedBy: manual`) and shows the six `MATSMTP_*` values **once**; enter them in the app (its
+Connections area or its compose file). Set `MAT_INTERNAL_URL` (or the *Servername*) to the address the app reaches MatSMTP at, and keep the port the app can
+reach (2025 inside the same Docker network; from another machine the published port with `starttls`).
 
 **Sign-in through MatIdentity.** With `MATIDENTITY_AUTHORITY` set, a visitor who is not signed in goes straight to MatIdentity (OpenID Connect, code with
 PKCE) and comes back signed in; the redirect address is `/signin-oidc`, the signed-out address `/signout-callback-oidc`, the back-channel logout `/signout-backchannel`. The local sign-in (with its

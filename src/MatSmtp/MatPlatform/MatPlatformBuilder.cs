@@ -1,4 +1,4 @@
-// MatPlatform 1.5.0 – a copy from MatDesign, do not edit here
+// MatPlatform 2.2.0 – a copy from MatDesign, do not edit here
 using Microsoft.AspNetCore.Http;
 
 namespace MatPlatform;
@@ -17,6 +17,9 @@ public sealed class MatPlatformBuilder
     private readonly List<MatRole> _roles = [];
     private readonly List<MatCapability> _provides = [];
     private readonly List<MatCapability> _consumes = [];
+    private readonly List<MatLauncher> _launchers = [];
+    private readonly List<MatWidget> _widgets = [];
+    private readonly List<MatQuickAction> _quickActions = [];
     private MatAppInfo? _app;
 
     public MatPlatformBuilder(string language)
@@ -92,17 +95,42 @@ public sealed class MatPlatformBuilder
         return this;
     }
 
-    /// <summary>A capability the app offers to the other apps (<c>/api/provides/{capability}</c>).</summary>
-    public MatPlatformBuilder Provides(string capability, int version = 1)
+    /// <summary>A capability the app offers to the other apps (docs/PLATFORM.md "Capabilities"); <paramref name="label"/>: what it is in words, for the Connections area.</summary>
+    public MatPlatformBuilder Provides(string capability, int version = 1, string? label = null)
     {
-        _provides.Add(new MatCapability(capability, version));
+        _provides.Add(new MatCapability(capability, version) { Label = label });
         return this;
     }
 
-    /// <summary>A capability of another app this one uses; <paramref name="optional"/>: it works without it.</summary>
-    public MatPlatformBuilder Consumes(string capability, int version = 1, bool optional = false)
+    /// <summary>
+    /// A capability of another app this one uses; <paramref name="optional"/>: it works without it. <paramref name="label"/>: what the app does with it, in words
+    /// ("Opens office files with"); <paramref name="parameters"/>: what it passes to the provider when it is bound.
+    /// </summary>
+    public MatPlatformBuilder Consumes(string capability, int version = 1, bool optional = false, string? label = null, IReadOnlyDictionary<string, string>? parameters = null)
     {
-        _consumes.Add(new MatCapability(capability, version, optional ? true : null));
+        _consumes.Add(new MatCapability(capability, version, optional ? true : null) { Label = label, Params = parameters });
+        return this;
+    }
+
+    /// <summary>An icon on the home screen of a shell: <paramref name="icon"/> and <paramref name="url"/> relative to the app (docs/PLATFORM.md "Contributions").</summary>
+    public MatPlatformBuilder Launcher(string id, string label, string icon, string url, string? audience = null, string? badge = null, string? accent = null)
+    {
+        _launchers.Add(new MatLauncher(id, label, icon, url) { Audience = audience, Badge = badge, Accent = accent });
+        return this;
+    }
+
+    /// <summary>A widget on the home screen of a shell; use the record's properties for its items, address, refresh and audience.</summary>
+    public MatPlatformBuilder Widget(MatWidget widget)
+    {
+        ArgumentNullException.ThrowIfNull(widget);
+        _widgets.Add(widget);
+        return this;
+    }
+
+    /// <summary>An entry of the menu of a launcher: an address of the app (relative), or the id of a post action with <paramref name="action"/>.</summary>
+    public MatPlatformBuilder QuickAction(string launcher, string label, string icon, string? url = null, string? action = null)
+    {
+        _quickActions.Add(new MatQuickAction(launcher, label, icon) { Url = url, Action = action });
         return this;
     }
 
@@ -121,6 +149,9 @@ public sealed class MatPlatformBuilder
             Actions = [.. _actions],
             Provides = [.. _provides],
             Consumes = [.. _consumes],
+            Contributes = _launchers.Count + _widgets.Count + _quickActions.Count == 0
+                ? null
+                : new MatContributions { Launchers = [.. _launchers], Widgets = [.. _widgets], QuickActions = [.. _quickActions] },
             Roles = _roles.Count == 0 ? null : [.. _roles],
             Endpoints = MatPlatformEndpoints.Paths,
         };
@@ -156,6 +187,24 @@ public sealed class MatPlatformOptions
     /// (for an app whose settings page has its own rules and messages).
     /// </summary>
     public bool CheckValues { get; set; } = true;
+
+    /// <summary>
+    /// The data folder of the app (<c>/data</c>): MatPlatform keeps the bindings there (<c>matplatform/bindings.json</c>), so an administrator can connect apps by hand in the
+    /// Connections area and the app can provide key capabilities without code. Null: bindings come from the variables only.
+    /// </summary>
+    public string? DataDirectory { get; set; }
+
+    /// <summary>
+    /// Who may use the Connections area (<c>&lt;mat-connections /&gt;</c> and its forms): usually the administrators of the app, as the app knows them
+    /// (<c>http =&gt; Task.FromResult(http.User.IsInRole("admin"))</c>). Null: nobody (the area is not shown).
+    /// </summary>
+    public Func<HttpContext, Task<bool>>? ConnectionsAccess { get; set; }
+
+    /// <summary>
+    /// The language of what MatPlatform draws in the app's own pages (the Connections area): `de` or `en` (`_ => "de"` for an app in German only). Null: the UI culture of the
+    /// request when it is one of <see cref="Languages"/>, else `Accept-Language` (an app whose pages follow the person's language).
+    /// </summary>
+    public Func<HttpContext, string>? UiLanguage { get; set; }
 
     /// <summary>Requests per minute and caller address on the anonymous <c>/api</c> and <c>/api/health</c>.</summary>
     public int AnonymousPermitPerMinute { get; set; } = 120;

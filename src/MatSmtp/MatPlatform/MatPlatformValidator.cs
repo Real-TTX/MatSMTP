@@ -1,4 +1,4 @@
-// MatPlatform 1.5.0 – a copy from MatDesign, do not edit here
+// MatPlatform 2.2.0 – a copy from MatDesign, do not edit here
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -171,9 +171,141 @@ public static partial class MatPlatformValidator
             {
                 problems.Add($"capability \"{capability.Capability}\" version {capability.Version}: a name like mail.send and a version from 1.");
             }
+
+            foreach (var key in (capability.Params ?? new Dictionary<string, string>()).Keys.Where(k => !KeyRegex().IsMatch(k ?? string.Empty)))
+            {
+                problems.Add($"capability {capability.Capability}: the parameter \"{key}\" is not camelCase.");
+            }
+        }
+
+        Unique(problems, "provides", definition.Provides.Select(c => c.Capability));
+        Unique(problems, "consumes", definition.Consumes.Select(c => c.Capability));
+
+        if (definition.Contributes is { } contributes)
+        {
+            Contributions(problems, sprite, contributes, definition, state);
         }
 
         return problems;
+    }
+
+    /// <summary>The checks of <c>contributes</c>: ids, addresses relative to the app, the kinds and sizes of the widgets and the keys of <c>state</c> they show.</summary>
+    private static void Contributions(List<string> problems, HashSet<string>? sprite, MatContributions contributes, MatApiDefinition definition, HashSet<string> state)
+    {
+        var launchers = Keys(problems, "contributes.launchers", contributes.Launchers.Select(l => l.Id));
+        foreach (var launcher in contributes.Launchers)
+        {
+            var what = "launcher " + launcher.Id;
+            Required(problems, what + ": the label", launcher.Label);
+            Relative(problems, what + ": the icon", launcher.Icon);
+            Relative(problems, what + ": the url", launcher.Url);
+            Audience(problems, what, launcher.Audience);
+            if (launcher.Badge is not null && !state.Contains(launcher.Badge))
+            {
+                problems.Add($"{what}: the badge \"{launcher.Badge}\" is not a key of state.");
+            }
+
+            if (launcher.Accent is not null && !AccentRegex().IsMatch(launcher.Accent))
+            {
+                problems.Add($"{what}: the accent \"{launcher.Accent}\" is not a colour like #2f6feb.");
+            }
+        }
+
+        Keys(problems, "contributes.widgets", contributes.Widgets.Select(w => w.Id));
+        foreach (var widget in contributes.Widgets)
+        {
+            var what = "widget " + widget.Id;
+            Required(problems, what + ": the label", widget.Label);
+            if (!MatWidgetKinds.All.Contains(widget.Kind ?? string.Empty))
+            {
+                problems.Add($"{what}: the kind \"{widget.Kind}\" is not one of {string.Join(", ", MatWidgetKinds.All)}.");
+            }
+
+            if (!MatWidgetKinds.Sizes.Contains(widget.Size ?? string.Empty))
+            {
+                problems.Add($"{what}: the size \"{widget.Size}\" is not one of {string.Join(", ", MatWidgetKinds.Sizes)}.");
+            }
+
+            var items = widget.Items ?? [];
+            var (least, most) = widget.Kind switch
+            {
+                MatWidgetKinds.Stat or MatWidgetKinds.Meter => (1, 1),
+                MatWidgetKinds.Tiles => (1, 4),
+                _ => (0, 0),
+            };
+            if (items.Count < least || items.Count > most)
+            {
+                problems.Add($"{what}: a {widget.Kind} widget shows {(least == most ? least.ToString(System.Globalization.CultureInfo.InvariantCulture) : $"{least} to {most}")} keys of state, not {items.Count}.");
+            }
+
+            foreach (var item in items.Where(i => !state.Contains(i)))
+            {
+                problems.Add($"{what}: \"{item}\" is not a key of state.");
+            }
+
+            if (widget.Kind == MatWidgetKinds.Meter && items.Count == 1 && definition.State.FirstOrDefault(s => s.Key == items[0]) is { } meter && meter.Widget != "meter")
+            {
+                problems.Add($"{what}: \"{items[0]}\" is not a meter.");
+            }
+
+            if (widget.Icon is not null)
+            {
+                Icon(problems, sprite, what, widget.Icon);
+            }
+
+            if (widget.Url is not null)
+            {
+                Relative(problems, what + ": the url", widget.Url);
+            }
+
+            if (widget.Refresh is < MatWidgetKinds.MinRefresh)
+            {
+                problems.Add($"{what}: refresh is {widget.Refresh} seconds, at least {MatWidgetKinds.MinRefresh}.");
+            }
+
+            Audience(problems, what, widget.Audience);
+        }
+
+        var posts = definition.Actions.Where(a => a.Kind == "post").Select(a => a.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var quick in contributes.QuickActions)
+        {
+            var what = $"quick action \"{quick.Label}\"";
+            if (!launchers.Contains(quick.Launcher ?? string.Empty))
+            {
+                problems.Add($"{what}: the launcher \"{quick.Launcher}\" does not exist.");
+            }
+
+            Required(problems, what + ": the label", quick.Label);
+            Icon(problems, sprite, what, quick.Icon);
+            if ((quick.Url is null) == (quick.Action is null))
+            {
+                problems.Add(what + ": needs either a url or a post action.");
+            }
+            else if (quick.Url is not null)
+            {
+                Relative(problems, what + ": the url", quick.Url);
+            }
+            else if (!posts.Contains(quick.Action!))
+            {
+                problems.Add($"{what}: \"{quick.Action}\" is not a post action.");
+            }
+        }
+    }
+
+    private static void Relative(List<string> problems, string what, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || !url.StartsWith('/') || url.StartsWith("//", StringComparison.Ordinal))
+        {
+            problems.Add($"{what} \"{url}\" is not an address of the app (starting with one /).");
+        }
+    }
+
+    private static void Audience(List<string> problems, string what, string? audience)
+    {
+        if (audience is not null && !MatAudience.All.Contains(audience))
+        {
+            problems.Add($"{what}: the audience \"{audience}\" is not one of {string.Join(", ", MatAudience.All)}.");
+        }
     }
 
     /// <summary>The problems of a definition as JSON (the body of <c>GET /api</c>).</summary>
