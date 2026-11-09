@@ -239,6 +239,7 @@ docker compose -f docker-compose.dev.yml up -d --build    # development stack
 | `MATSMTP_ADMIN_EMAIL` | `admin` | The sign-in name of that administrator |
 | `MATSMTP_API_KEY` | – | The key of the management API `/api/v1` (header `X-Api-Key`). Not set: the API answers 503 |
 | `MAT_API_KEY` | – | The key of the platform endpoints `/api/*` (header `X-Api-Key`). Not set: `MATSMTP_API_KEY` serves there too |
+| `MAT_FRAME_ANCESTORS` | – | The addresses (origins) that may show MatSMTP in a frame, separated by spaces, such as `http://localhost:8030 https://mattiverse.example.com`: Mattiverse sets its own, so it can open MatSMTP in the window of its home screen. With it, answers carry `frame-ancestors 'self' <origins>` instead of `X-Frame-Options`; anything that is not an origin (a path, `*`) is left out. Not set: nobody may frame MatSMTP. |
 | `MATIDENTITY_AUTHORITY` | – | The address of MatIdentity (`https://id.example.com`). Set = sign-in through MatIdentity |
 | `MATIDENTITY_CLIENT_ID` | `matsmtp` | The client of MatSMTP in MatIdentity |
 | `MATIDENTITY_CLIENT_SECRET` | – | Its secret |

@@ -46,6 +46,9 @@ public class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary><c>MATIDENTITY_AUTHORITY</c> of this fixture: the sign-in through MatIdentity (one that does not need to run).</summary>
     protected virtual string? Authority => null;
 
+    /// <summary><c>MAT_FRAME_ANCESTORS</c> of this fixture: the origins that may show MatSMTP in a frame (Mattiverse).</summary>
+    protected virtual string? FrameAncestors => null;
+
     public string DataDir { get; } = Path.Combine(Path.GetTempPath(), "ms-it-" + Guid.NewGuid().ToString("N")[..8]);
 
     /// <summary>The plain SMTP port of the receiver (STARTTLS offered).</summary>
@@ -83,6 +86,7 @@ public class AppFixture : WebApplicationFactory<Program>, IAsyncLifetime
         Environment.SetEnvironmentVariable(MatPlatformSettings.ClientIdVariable, null);
         Environment.SetEnvironmentVariable(MatPlatformSettings.ClientSecretVariable, Authority is null ? null : "test-secret");
         Environment.SetEnvironmentVariable(MatPlatformSettings.InternalUrlVariable, null);
+        Environment.SetEnvironmentVariable(MatFrameAncestors.Variable, FrameAncestors);
         return base.CreateHost(builder);
     }
 
@@ -249,6 +253,14 @@ public sealed class SeededFixture : AppFixture
     public const string Password = "Seeded-Admin-2026";
 
     protected override string? AdminPassword => Password;
+}
+
+/// <summary>With <c>MAT_FRAME_ANCESTORS</c>, as Mattiverse sets it: Mattiverse may show MatSMTP in its window.</summary>
+public sealed class FramedFixture : AppFixture
+{
+    public const string Mattiverse = "http://localhost:8030";
+
+    protected override string? FrameAncestors => Mattiverse;
 }
 
 /// <summary>With <c>MATIDENTITY_AUTHORITY</c> (a MatIdentity that does not need to run) and its own <c>MAT_API_KEY</c>.</summary>
